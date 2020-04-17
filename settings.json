@@ -1,0 +1,9 @@
+{
+    "exposureTime": 245,
+    "videoSamplingRate": 4000,
+    "audioSamplingRate": 80000,
+    "audioBlockSize": 4000,
+    "audioBufferSize": 3,
+    "baseFolder": "C:/openhsv",
+    "saveRaw": true
+}
