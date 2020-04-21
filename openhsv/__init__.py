@@ -36,7 +36,6 @@ class OpenHSV (QWidget):
     :param app: To init OpenHSV, you only need to pass the QApplication instance
     :type app: QtWidgets.QApplication
     """
-
     def __init__(self, app):
         super().__init__()
 
@@ -51,6 +50,8 @@ class OpenHSV (QWidget):
         self.audioBufferSize = 5
         self.audioBuffer = [0]*self.audioBufferSize
         self.hann = np.hanning(self.audioBlockSize*self.audioBufferSize)
+
+        # Save audio data in a queue
         self.audioQueue = queue.Queue()
 
         self.t = QTimer()
@@ -98,7 +99,7 @@ class OpenHSV (QWidget):
         self.audioCurve2 = self.audio.plot(np.ones(1000, )-2, pen=pg.mkPen('y'))
 
         # F0
-        self.f0_item = pg.TextItem("x Hz")
+        self.f0_item = pg.TextItem("xxx Hz")
         self.audio.addItem(self.f0_item)
         self.F0_timer = QTimer()
         self.F0_timer.timeout.connect(self.F0)
@@ -141,11 +142,6 @@ class OpenHSV (QWidget):
 
         self.b5 = QPushButton("Take screenshot")
         self.b5.clicked.connect(self.screenshot)
-
-
-        # self.sl = QWidget()
-        # self.sll = QHBoxLayout(self.sl)
-        # self.sll.setContentsMargins(0, 0, 100, 100)
 
         self.start_slider = QSlider(orientation=Qt.Horizontal)
         self.start_slider.setMinimum(1)
@@ -201,6 +197,7 @@ class OpenHSV (QWidget):
         self.saveButton.setEnabled(False)
         self.l.addWidget(self.saveButton, 13, 1)
 
+        # Play/Stop preview of data, doesn't work well
         self.b2 = QPushButton("Play/Stop")
         self.b2.clicked.connect(self.playStop)
         self.b2.setEnabled(False)
@@ -210,19 +207,24 @@ class OpenHSV (QWidget):
         self.initSettings()
 
     def showMaximized(self):
+        """shows the window maximized and updates the range indicator
+        """
         super().showMaximized()
+
+        # Updates the range indicator,
+        # fix for changing window width
         self.delayedUpdate = Timer(.1, self.updateRangeIndicator)
         self.delayedUpdate.start()
 
     def screenshot(self):
-        scr = self.im.getImageItem()
-
-        im = scr.image
+        """Takes a screenshot from the current camera image and saves it as png file.
+        """
+        im = self.im.getImageItem().image
         io.imsave("Screenshot_{}.png".format(datetime.now().strftime("%Y%m%d_%H%M%S")), im)
 
-        pass
-
     def settings(self):
+        """Opens settings dialog and saves settings
+        """
         s = Settings(self.exposureTime,
                      self.videoSamplingRate,
                      self.audioSamplingRate,
@@ -236,6 +238,8 @@ class OpenHSV (QWidget):
         # self.base_folder = s.base_folder.text()
         self.initSettings(**s.get())
 
+        # If camera was already initialized,
+        # close camera and re-initialize it
         if self.cam is not None:
             self.cam.closeCamera()
             self.initCamera(True)
@@ -248,7 +252,23 @@ class OpenHSV (QWidget):
                      audioBufferSize=3,
                      baseFolder='',
                      saveRaw=True):
-
+        """Initializes camera, audio and saving settings
+        
+        :param exposureTime: camera exposure time in us, defaults to 245
+        :type exposureTime: int, optional
+        :param videoSamplingRate: frames per second, defaults to 4000
+        :type videoSamplingRate: int, optional
+        :param audioSamplingRate: audio sampling rate in Hz, defaults to 80000
+        :type audioSamplingRate: int, optional
+        :param audioBlockSize: audio block size transmitted from interface, defaults to 4000
+        :type audioBlockSize: int, optional
+        :param audioBufferSize: audio buffer size (multiples of block size), defaults to 3
+        :type audioBufferSize: int, optional
+        :param baseFolder: base folder for data saving, defaults to ''
+        :type baseFolder: str, optional
+        :param saveRaw: if raw video data should be saved as lossless compressed mp4, defaults to True
+        :type saveRaw: bool, optional
+        """
         self.exposureTime = exposureTime
         self.videoSamplingRate = videoSamplingRate
         self.audioSamplingRate = audioSamplingRate
@@ -256,6 +276,7 @@ class OpenHSV (QWidget):
         self.audioBufferSize = audioBufferSize
 
         self.audioBuffer = [0] * self.audioBufferSize
+        # Create hanning window for better FFT ability of our signal
         self.hann = np.hanning(self.audioBlockSize * self.audioBufferSize)
 
         if baseFolder:
@@ -270,28 +291,55 @@ class OpenHSV (QWidget):
         self.patientInformation = p.get()
 
     def updateRangeIndicator(self):
+        """updates the range indicator that shows the subselection of the video
+        for download or analysis
+        """
+        # Get indicator width and height
         w, h = self.rangeIndicator.width(), self.rangeIndicator.height()
+
+        # Create an empty image to draw on
         pix = QPixmap(w, h)
         p = QPainter(pix)
+
+        # Draw background color
         p.setBrush(QBrush(QColor("#19232D")))
         p.drawRect(-1, -1, w, h)
+
+        # Draw foreground color
         p.setBrush(QBrush(QColor("#1464A0")))
 
+        # Define region start and end on x axis
         x0 = w*self.start_slider.value()/self.start_slider.maximum()
         x1 = w*self.end_slider.value()/self.end_slider.maximum()
 
+        # Draw rect from start to end of selection
         p.drawRect(int(x0), 0, int(x1-x0), h)
+
+        # Display the number of frames selected
         p.setPen(QPen(QColor("#FFFFFF")))
-        p.drawText(0, 17, "{} frames selected".format(self.end_slider.value()-self.start_slider.value()+1))
+        p.drawText(0, # left
+            17, # center
+            "{} frames selected".format(self.end_slider.value()-self.start_slider.value()+1))
         p.end()
 
+        # Show the image
         self.rangeIndicator.setPixmap(pix)
 
-    def crop(self, im):
+    def _crop(self, im):
+        """crops image to ROI on the preview window
+        
+        :param im: camera/video frame
+        :type im: numpy.ndarray
+        :return: cropped video frame
+        :rtype: numpy.ndarray
+        """
+        # Get ROI position and size
         pos = self.roi.pos()
         size = self.roi.size()
 
-        return im[int(pos[1]):int(pos[1]+size[1]), int(pos[0]):int(pos[0]+size[0])]
+        # Crop image to ROI selection
+        return im[int(pos[1]):int(pos[1]+size[1]), 
+                  int(pos[0]):int(pos[0]+size[0])]
 
     def initCamera(self, force_init=False):
         """Initializes camera connection. Open camera, do basic configuration
@@ -337,15 +385,33 @@ class OpenHSV (QWidget):
             self.t.start(10)
             self.play = True
 
-    def setImage(self, im):
+    def setImage(self, im, restore_view=True, restore_levels=False):
+        """Shows image in the camera preview window. It further can restore the previous
+        view, i.e. zoom and location, as well as the levels (contrast, brightness) of the
+        previous image. Currently, the restoring level feature is by default deactivated,
+        because in the examination procedure it is quite common that there is no signal
+        (away from patient) or oversaturated (very close to the mouth/tongue).
+        
+        :param im: image to be shown in preview
+        :type im: numpy.ndarray
+        :param restore_view: if view should be restored from previous image, defaults to True
+        :type restore_view: bool, optional
+        :param restore_levels: if contrast/brightness should be restored from previous image, defaults to False
+        :type restore_levels: bool, optional
+        """
         # Save view from current image
         state, levels = self.im.getView().getState(), self.im.getImageItem().levels
+
         # Set new image
         self.im.setImage(im)
+
         # Restore view
-        self.im.getView().setState(state)
+        if restore_view:
+            self.im.getView().setState(state)
+
         # Restore levels
-        # self.im.getImageItem().setLevels(levels)
+        if restore_levels:
+            self.im.getImageItem().setLevels(levels)
 
     def nextFrame(self):
         self.cur_frame += 1
@@ -357,10 +423,19 @@ class OpenHSV (QWidget):
         self.setImage(im.transpose((1, 0, 2)))
 
     def initAudio(self):
+        """initialize audio recorder and empties the audio queue and data list. 
+        It selects the first audio interface found (in OpenHSV the Focusrite Scarlet 2i2),
+        selects both channels (by default, channel 1 is the camera reference signal and
+        channel 2 the actual audio signal). Every audio data block is passed to the callback function.
+        The callback works already on a separate thread, no need to move it to a different one.
+        It also immmediately starts the recorder.
+        """
         if self.recorder is None:
             self.audioQueue = queue.Queue()
             self.audioData = []
 
+            # Create a new recorder input stream object.
+            # Select first device, which is typically the desired audio interface.
             self.recorder = sd.InputStream(samplerate=self.audioSamplingRate, 
                 device=1, 
                 channels=2, 
@@ -370,6 +445,11 @@ class OpenHSV (QWidget):
             self.recorder.start()
 
     def audioCallback(self, data, *args):
+        """Audio callback that retrieves the data from the audio signal.
+        
+        :param data: [description]
+        :type data: [type]
+        """
         self.audioCurve1.setData(data[:, 0]+1)
         self.audioCurve2.setData(data[:, 1]-1)
 
@@ -383,38 +463,46 @@ class OpenHSV (QWidget):
 
         self.recorder = None
 
-    def F0(self):
+    def _showF0(self, f0=None):
+        if f0 is None:
+            f0_text = "xxx"
 
+        else:
+            f0_text = "{:.1f}".format(f0)
+
+        self.f0_item.setText("F0: {} Hz".format(f0_text))
+
+    def F0(self, channel_for_F0=1, intensity_threshold=5):
         if self.audioQueue.empty():
             return
 
+        # Get data from audio queue
         data = self.audioQueue.get()
         self.audioData.append(data)
-        d = data[:, 1]
+        d = data[:, channel_for_F0]
 
-        # self.buffer_id += 1
-        # self.audioBuffer[self.audioBlockSize * (self.buffer_id % self.audioBufferSize):self.audioBlockSize * (
-        #         self.buffer_id % self.audioBufferSize + 1)] = d
+        # Rolling audio buffer
         self.audioBuffer = self.audioBuffer[1:]
         self.audioBuffer.append(d)
-
         buffer = np.hstack(self.audioBuffer)
 
         # Compute F0
         # Get power spectrum of buffer with hanning window
         if self.hann.size == buffer.size:
-            # f = np.abs(np.fft.fft(buffer * self.hann)) ** 2
-            f = np.abs(np.fft.fft(buffer))[:buffer.size//2]
+            # FFT from hanning window modulated signal, only positive frequencies
+            f = np.abs(np.fft.fft(buffer * self.hann))[:buffer.size//2]
 
             # Get associated frequencies
             freq = np.fft.fftfreq(buffer.size, 1/self.audioSamplingRate)[:buffer.size//2]
-            #
-            # self.f0_item.moveToThread(self.thread())
-            if f.max() > 5:
-                self.f0_item.setText("F0: {:.1f} Hz".format(freq[np.argmax(f)]))
+
+            # Only provide F0, if above a certain amplitude threshold, 
+            # to avoid computing F0 from noise
+            if f.max() > intensity_threshold:
+                # Assume that fundamental frequency is also dominant frequency
+                self._showF0(freq[np.argmax(f)])
 
             else:
-                self.f0_item.setText("F0: xxx Hz")
+                self._showF0()
 
     def startCamera(self):
         if self.grabbing:
@@ -507,7 +595,7 @@ class OpenHSV (QWidget):
             except:
                 pass
 
-    def analyze(self, verbose=True):
+    def analyze(self):
         start, end = self.start_slider.value(), self.end_slider.value()
 
         if verbose:
@@ -521,8 +609,8 @@ class OpenHSV (QWidget):
 
         elif self.analysis is not None:
             k = QMessageBox.question(self,
-                                     "Delete analysis?",
-                                     "We found an analysis already, do you want to delete this analysis and start over again?")
+                    "Delete analysis?",
+                    "We found an analysis already, do you want to delete this analysis and start over again?")
 
             if k == QMessageBox.No:
                 return
@@ -544,7 +632,7 @@ class OpenHSV (QWidget):
 
             self.imagingData.append(im)
 
-            im_crop = self.crop(im)
+            im_crop = self._crop(im)
             im_crop = (im_crop - im_crop.min()) / (im_crop.max() - im_crop.min()) * 2 - 1
 
             self.a.segment(im_crop)
@@ -557,7 +645,7 @@ class OpenHSV (QWidget):
                 self.progess.setEnabled(False)
                 break
 
-        if verbose:
+        if self.verbose:
             print("Total ims: ", len(ims))
 
         self.analysis = self.a.get()
@@ -566,7 +654,39 @@ class OpenHSV (QWidget):
         self.analysis['roi_pos'] = [int(i) for i in self.roi.pos()]
         self.analysis['roi_size'] = [int(i) for i in self.roi.size()]
 
-    def save(self, verbose=True):
+    def save(self, save_last_seconds=4):
+        """Saves the recorded and selected data. In particular, we save
+        the metadata, including audio, video and patient metadata, audio
+        data together with camera reference signal and video data.
+
+        :param save_last_seconds: the last seconds from recording end to
+        be saved. We record one second after the `stop`-trigger, and we 
+        usually record one second of footage, thus, we need at least two
+        seconds to ensure saving all relevant audio data. To adjust for some
+        uncertainties, we recommend recording a few more seconds. Defaults to 4.
+        :type save_last_seconds: int
+
+        ``Notes`` 
+
+        Saving the data in an appropriate format is not trivial. We both
+        need to consider portability, cross-functionality and quality.
+        Therefore, we save metadata as structured JSON file format, a common
+        file format that can be opened and viewed with any text editor,
+        but easily processed by a variety of data analysis software.
+    
+        Further, audio data is saved as common wav files, as well as packed as
+        HDF5 file. HDF5 is a very common container format that allows storing
+        of complex data in a very efficient and convenient way. 
+
+        Video data, however, is saved as ``mp4`` file format, as this is 
+        highly portable and can be viewed with a common video viewers. The h264 codec
+        also allows saving the video data in a lossless file format, needed for accurate
+        data analysis while keeping the file size at a reasonable level and still
+        ensure the ability to preview the video.
+
+        If there's any segmentation already available, the segmentation maps
+        are stored as well in HDF5 file format as binary maps.
+        """
         if self.saveButton.text() == "Abort saving":
             self.abortSaving = True
             self.saveButton.setText("Save data.")
@@ -585,8 +705,8 @@ class OpenHSV (QWidget):
         # Get start and end range from video
         start, end = self.start_slider.value(), self.end_slider.value()
 
-        if verbose:
-            print(start, end)
+        if self.verbose:
+            print("Saving data from frame {} to {}".format(start, end))
 
         # No frames selected...
         if start == end:
@@ -639,7 +759,7 @@ class OpenHSV (QWidget):
 
         saved = []
 
-        if verbose:
+        if self.verbose:
             print(fn_base)
             sys.stdout.flush()
 
@@ -653,7 +773,8 @@ class OpenHSV (QWidget):
                 im = self.cam.getMemoryFrame(frame_index, by_trigger=True)
                 ims.append(im)
 
-                self.progess.setValue(int(np.ceil(i / (end - start + 1e-5) * 100)))
+                # Show progress up to 90% for downloading the images
+                self.progess.setValue(int(np.ceil(i / (end - start + 1e-5) * 90)))
                 self.app.processEvents()
 
                 if self.abortSaving:
@@ -663,12 +784,16 @@ class OpenHSV (QWidget):
         else:
             ims = self.imagingData
 
-        if verbose:
+        if self.verbose:
             print("Total images: ", len(ims))
 
-        # Save movie
+        # Save movie as compressed mp4 (h264 codec)
         io.mimsave(fn_base+".mp4", ims)
         saved.append("Movie [mp4]")
+        
+        # Show progress at 92% for saving the video
+        self.progess.setValue(92)
+        self.app.processEvents()
 
         # Prepare metadata
         meta = {'Audio':
@@ -709,8 +834,16 @@ class OpenHSV (QWidget):
             json.dump(meta, fp, indent=4)
         saved.append("Metadata [json]")
 
-        # Save last 4 s of recorded audio 
-        audio = np.vstack(self.audioData)[-self.audioSamplingRate*4:]
+        # Show progress at 95% for saving the metadata
+        self.progess.setValue(95)
+        self.app.processEvents()
+
+        # Save recorded audio 
+        audio = np.vstack(self.audioData)
+        
+        # Crop to save_last_seconds if audio data is longer
+        if len(audio) >= self.audioSamplingRate*save_last_seconds:
+            audio = audio[-self.audioSamplingRate*save_last_seconds:]
 
         # Save audio as compressed hdf5 file
         fl.save(fn_base+".audio", dict(audio=audio), compression=("blosc", 5))
@@ -719,6 +852,10 @@ class OpenHSV (QWidget):
         # Save audio also as wav file - for the time being
         wavwrite(fn_base +".wav", self.audioSamplingRate, audio)
         saved.append("Audio [wav]")
+
+        # Show progress at 97% for saving the audio data
+        self.progess.setValue(97)
+        self.app.processEvents()
 
         if self.save_raw:
             # Save as lossless compressed mp4 file using h264 codec
@@ -731,7 +868,11 @@ class OpenHSV (QWidget):
 
             saved.append("Movie (lossless) [mp4]")
 
-        if verbose:
+        # Show progress at 100% for saving the video lossless
+        self.progess.setValue(100)
+        self.app.processEvents()
+
+        if self.verbose:
             print("Done with saving!")
 
         # Reset buttons
