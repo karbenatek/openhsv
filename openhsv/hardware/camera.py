@@ -92,6 +92,10 @@ class DummyCamera(Camera):
         self._idle = True
         self.i = 0
 
+        # Needed for saving metadata
+        self.frames_to_record = 4000
+        self.frames_before_trigger = 4000
+
         self.ims = io.mimread("./openhsv/examples/oscillating_vocal_folds.mp4", memtest=False)
 
     def openCamera(self):
