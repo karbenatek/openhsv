@@ -1,7 +1,7 @@
 # Libraries used
 from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QSlider, QPushButton, QProgressBar, QLabel, \
     QMessageBox, QSplashScreen, QSizePolicy, QDialog, QLineEdit, QDateEdit, QCheckBox, QComboBox, QFileDialog
-from PyQt5.QtGui import QPixmap, QPainter, QBrush, QColor, QPen, QIntValidator
+from PyQt5.QtGui import QPixmap, QPainter, QBrush, QColor, QPen, QIntValidator, QFont
 from PyQt5.QtCore import Qt, QTimer
 import qdarkstyle
 import pyqtgraph as pg
@@ -103,11 +103,16 @@ class OpenHSV (QWidget):
         self.audio = pg.PlotWidget()
         self.audioData = []
         # self.audio.setMaximumHeight(350)
-        self.audioCurve1 = self.audio.plot(np.ones(1000,), pen=pg.mkPen('m'))
-        self.audioCurve2 = self.audio.plot(np.ones(1000, )-2, pen=pg.mkPen('y'))
+        self.audioCurve1 = self.audio.plot(np.ones(self.audioBlockSize,), pen=pg.mkPen('m'))
+        self.audioCurve2 = self.audio.plot(np.ones(self.audioBlockSize, )-2, pen=pg.mkPen('y'))
+
+        ay = self.audio.getPlotItem().getAxis('left')
+        ay.setTicks([[(-1, '  audio'), (1, '  reference')]])
+
 
         # F0
         self.f0_item = pg.TextItem("xxx Hz")
+        self.f0_item.setFont(QFont("Arial", 15))
         self.audio.addItem(self.f0_item)
         self.F0_timer = QTimer()
         self.F0_timer.timeout.connect(self.F0)
@@ -279,11 +284,20 @@ class OpenHSV (QWidget):
         self.audioSamplingRate = audioSamplingRate
         self.audioBlockSize = audioBlockSize
         self.audioBufferSize = audioBufferSize
-
         self.audioBuffer = [0] * self.audioBufferSize
+
         # Create hanning window for better FFT ability of our signal
         self.hann = np.hanning(self.audioBlockSize * self.audioBufferSize)
 
+        # Format x axis on audio plot
+        self.audio.getPlotItem().setRange(xRange=(0, audioBlockSize))
+        ax = self.audio.getPlotItem().getAxis("bottom")
+
+        el = 6
+        ticks = np.linspace(0, audioBlockSize, el)[::-1]
+        ax.setTicks([[(ticks[el-i-1], "-{:.0f} ms".format(ticks[i]/audioSamplingRate*1000)) for i in range(el)]])
+
+        # Other settings
         if baseFolder:
             self.base_folder = baseFolder
         
