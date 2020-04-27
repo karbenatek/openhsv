@@ -18,8 +18,12 @@ class fullScreenPreview(QWidget):
         self.im = pg.ImageView()
         self.l.addWidget(self.im, 1, 0, 1, 10)
         
-
     def setImage(self, im):
+        """Sets image in central ImageView
+
+        :param im: image to be shown
+        :type im: numpy.ndarray
+        """        
         self.im.setImage(im)
 
 if __name__ == '__main__':

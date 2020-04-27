@@ -24,6 +24,45 @@ def _find_bottom(x, t=0.02):
             
     return i
 
+"""
+    ***************
+    Event detection
+    ***************
+"""
+
+def detectMaximaMinima(s, distance=5, rel_height=.35, use_prominence=True):
+    """Detect maxima and minima from a signal ``s``.
+    
+    :param s: signal
+    :type s: numpy.ndarray
+    :param distance: distance between two peaks in samples, defaults to 5
+    :type distance: int, optional
+    :param rel_height: minimum relative height of a found peak, defaults to .35
+    :type rel_height: float, optional
+    :param use_prominence: uses peak prominence for peak detection, defaults to True
+    :type use_prominence: bool, optional
+    :return: tuple of maxima and minima locations
+    :rtype: tuple(numpy.ndarray, numpy.ndarray)
+    """
+    
+    if use_prominance:
+        p_max = find_peaks(s, prominence=.5)[0]
+        p_min = find_peaks(-s, prominence=.5)[0]
+
+    else:
+        h_max = s.max() - s.min()
+        h_min = (-s).max() - (-s).min()
+
+        p_max = find_peaks(s, 
+            distance=distance, 
+            height=rel_height*h_max)[0]
+        
+        p_min = find_peaks(-s, 
+            distance=distance, 
+            height=rel_height*h_min)[0]
+
+    return p_max, p_min
+
 def detectOpeningAndClosingEvents(signal, p_max, t=0.02):
     """Detects glottis opening and closing events relative to 
     maximum opening events.
@@ -59,30 +98,141 @@ def detectOpeningAndClosingEvents(signal, p_max, t=0.02):
 
     return opening, closing
 
-def detectMaximaMinima(s, distance=5, rel_height=.35):
-    """Detect maxima and minima from a signal ``s``.
-    
-    :param s: signal
-    :type s: numpy.ndarray
-    :param distance: distance between two peaks in samples, defaults to 5
-    :type distance: int, optional
-    :param rel_height: minimum relative height of a found peak, defaults to .35
-    :type rel_height: float, optional
-    :return: tuple of maxima and minima locations
+def computeOpenAndClosedIntervals(t, opened, closed):
+    """computes the opened and closed intervals during each cycle.
+
+    :param t: time
+    :type t: numpy.ndarray
+    :param opened: indices of opening points
+    :type opened: list(int)
+    :param closed: indices of closing points
+    :type closed: list(int)
+    :return: duration of opening and closed phases
+    :rtype: tuple(list(float), list(float))
+    """    
+    open_t = [self.t[c]-self.t[o] for o, c in zip(opened, closed)]
+    closed_t = [self.t[o]-self.t[c] for o, c in zip(opened[1:], closed)]
+
+    return open_t, closed_t
+
+def computeOCandCOTransitions(t, opened, closed, p_max):
+    """Computes Open->Closed (OC) and Closed-Open (CO) transitions.
+
+    :param t: time
+    :type t: numpy.ndarray
+    :param opened: indices of opening points
+    :type opened: list(int)
+    :param closed: indices of closing points
+    :type closed: list(int)
+    :param p_max: indices of cycle maxima
+    :type p_max: numpy.ndarray
+    :return: CO and OC durations
     :rtype: tuple(numpy.ndarray, numpy.ndarray)
-    """
-    h_max = s.max() - s.min()
-    h_min = (-s).max() - (-s).min()
+    """    
+    CO = np.array([self.t[p]-self.t[o]  for o, p in zip(opened, p_max)])
+    OC = np.array([self.t[c]-self.t[p]  for c, p in zip(closed, p_max)])
 
-    p_max = find_peaks(s, 
-        distance=distance, 
-        height=rel_height*h_max)[0]
-    
-    p_min = find_peaks(-s, 
-        distance=distance, 
-        height=rel_height*h_min)[0]
+    return CO, OC
 
-    return p_max, p_min
+"""
+    ***************
+    Parameters
+    ***************
+"""
+
+"""
+    +++++++
+    GAW
+    +++++++
+"""
+
+def asymmetryQuotient(CO, OC):
+    """Asymmetry Quotient (AQ)
+
+    :param CO: Closed->Open transitions
+    :type CO: numpy.ndarray
+    :param OC: Open->Closed transitions
+    :type OC: numpy.ndarray
+    :return: asymmetry quotient (AQ), a.u.
+    :rtype: float
+    """    
+    aq = np.mean((CO / OC) / (1 + (CO / OC)))
+
+    return aq
+
+def closingQuotient(CO, OC):
+    """Closing Quotient (CQ)
+
+    :param CO: Closed->Open transitions
+    :type CO: numpy.ndarray
+    :param OC: Open->Closed transitions
+    :type OC: numpy.ndarray
+    :return: closing quotient (CQ), a.u.
+    :rtype: float
+    """    
+    cq = np.mean(CO/(CO+OC))
+
+    return cq
+
+def openQuotient(t_open, t_closed):
+    """Open Quotient (OQ)
+
+    :param t_open: Open intervals
+    :type t_open: numpy.ndarray
+    :param t_closed: Closed intervals
+    :type t_closed: numpy.ndarray
+    :return: open quotient (OQ), a.u.
+    :rtype: float
+    """    
+    oq = np.mean(t_open / t_open+t_closed)
+
+    return oq
+
+def rateQuotient(CO, OC, t_closed):
+    """Rate Quotient (RQ)
+
+    :param CO: Closed->Open transitions
+    :type CO: numpy.ndarray
+    :param OC: Open->Closed transitions
+    :type OC: numpy.ndarray
+    :param t_closed: closed intervals
+    :type t_closed: numpy.ndarray
+    :return: rate quotient (RQ), a.u.
+    :rtype: float
+    """    
+    rq = np.mean((t_closed + CO) / OC)
+
+    return rq
+
+def speedIndex(CO, OC, t_open):
+    """Speed Index (SI)
+
+    :param CO: Closed->Open transitions
+    :type CO: numpy.ndarray
+    :param OC: Open->Closed transitions
+    :type OC: numpy.ndarray
+    :param t_open: open intervals
+    :type t_open: numpy.ndarray
+    :return: speed index (SI), a.u.
+    :rtype: float
+    """    
+    si = (CO-OC) / t_open
+
+    return np.mean(si)
+
+def speedQuotient(CO, OC):
+    """Speed Quotient (SQ)
+
+    :param CO: Closed->Open transitions
+    :type CO: numpy.ndarray
+    :param OC: Open->Closed transitions
+    :type OC: numpy.ndarray
+    :return: speed quotient (SQ), a.u.
+    :rtype: float
+    """    
+    sq = CO / OC
+
+    return np.mean(SQ)
 
 def F0fromCycles(T, verbose=False):
     r"""determine fundamental frequency (F0) based on period lengths
@@ -130,8 +280,18 @@ def jitterPercent(T):
     
     return numerator / denominator * 100
 
-def shimmer():
-    pass
+def meanShimmer():
+    r"""Calculating the mean shimmer in dB from the signal amplitude maxima.
+
+    .. math::
+        \text{mean-Shimmer [db]} = \frac{20}{N-1}\sum_{i=0}^{N-2}|\log_{10} \left[ \frac{A_i}{A_{i+1}} \right]|.
+
+    :return: mean shimmer in db
+    :rtype: float
+    """    
+    meanShimmer = 20 * np.mean([np.abs(np.log10(A[i]/A[i+1])) for i in range(len(A)-1)])
+    
+    return meanShimmer
 
 def shimmerPercent(A, e=1e-5):
     r"""Calculating the shimmer in percent from the signal amplitude maxima.
@@ -254,12 +414,23 @@ class Signal:
 
         signal = self.filtered_signal if use_filtered_signal else self.signal
         self.opening, self.closing = detectOpeningAndClosingEvents(signal, self.raw_peaks[0])
+        self.t_open, self.t_closed = computeOpenAndClosedIntervals(self.t, self.opening, self.closing)
 
     def getPowerSpectrum(self):
+        """Returns power spectrum from signal
+
+        :return: Frequencies and Amplitude
+        :rtype: tuple(np.ndarray, np.ndarray)
+        """        
         return self.fftfreq, np.abs(self.fft)
 
     def getCepsturm(self):
-        return self.fftfreq, self.cepstrum
+        """Returns cepstrum from signal
+
+        :return: quefrencies and cepstrum
+        :rtype: tuple(np.ndarray, np.ndarray)
+        """        
+        return self.t, self.cepstrum
 
 class AnalysisPlatform(QWidget):
     def __init__(self, raw_signal, dt):
