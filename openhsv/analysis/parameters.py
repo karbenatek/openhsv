@@ -253,12 +253,14 @@ def F0fromCycles(T, verbose=False):
         
     return f0, f0_std
 
-def meanJitter():
+def meanJitter(T):
     r"""Calculating the mean jitter in ms from signal periods
 
     .. math::
         \text{mean-Jitter} = \frac{\sum_{i=1}^{N-1}|T_i - T_{i-1}|}{N-1}
     
+    :param T: The signal periods
+    :type T: numpy.ndarray or list
     :return: mean jitter in ms
     :rtype: float
     """
@@ -280,12 +282,14 @@ def jitterPercent(T):
     
     return numerator / denominator * 100
 
-def meanShimmer():
+def meanShimmer(A):
     r"""Calculating the mean shimmer in dB from the signal amplitude maxima.
 
     .. math::
         \text{mean-Shimmer [db]} = \frac{20}{N-1}\sum_{i=0}^{N-2}|\log_{10} \left[ \frac{A_i}{A_{i+1}} \right]|.
 
+    :param A: The signal amplitude maxima
+    :type A: numpy.ndarray or list
     :return: mean shimmer in db
     :rtype: float
     """    
