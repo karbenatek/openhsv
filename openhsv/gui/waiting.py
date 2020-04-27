@@ -37,7 +37,7 @@ class Waiting(QWidget):
             self.l.addWidget(t)
 
         d = QDesktopWidget().availableGeometry().center()
-        self.move(d.x()-64, d.y()-64)
+        self.move(d.x()-self.width()//2, d.y()-self.height()//2)
         self.show()
 
 if __name__ == '__main__':

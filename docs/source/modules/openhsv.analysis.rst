@@ -12,6 +12,14 @@ openhsv\.analysis\.nn module
     :undoc-members:
     :show-inheritance:
 
+openhsv\.analysis\.parameters module
+------------------------------------
+
+.. automodule:: openhsv.analysis.parameters
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 
 Module contents
 ---------------
