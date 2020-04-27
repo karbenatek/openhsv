@@ -245,6 +245,11 @@ class Signal:
         self.A = signal[self.raw_peaks[peak]]
 
     def detectPhases(self, use_filtered_signal=True):
+        """Detects opening and close phase in each cycle.
+
+        :param use_filtered_signal: Event detection on raw (False) or filtered (True) signal.
+        :type use_filtered_signal: bool, optional
+        """
         assert self.raw_peaks, "first you need to find local minima and maxima (--> detectCycles)"
 
         signal = self.filtered_signal if use_filtered_signal else self.signal
