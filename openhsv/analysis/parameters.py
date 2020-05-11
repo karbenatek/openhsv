@@ -326,6 +326,123 @@ def periodPerturbationFactor(T):
     """
     return np.mean(np.abs(np.diff(T)/T[1:])) * 100
 
+def harmonicNoiseRatio(signal, freq, freq_lower=50, freq_higher=350):
+    """Computes Harmonic-Noise-Ratio  (HNR) using autocorrelation approximation.
+    First, it computes the fundamental frequency using the power spectrum of ``signal``.
+    Next, it computes the autocorrelation in Fourier space. 
+    Then, local maxima in the autocorrelation are found, the HNR computed and the maximum HNR
+    and the corresponding frequency is returned.
+
+    .. math::
+        R_{xx} = \frac{1}{N} \sum_{k=l}^{N-1} x[k]x[k-l]
+
+        HNR = \frac{R_{xx}[T_0]}{R_{xx}[0]-R_{xx}[T_0]}
+
+    :param signal: audio signal
+    :type signal: numpy.ndarray
+    :param freq: sampling rate/frequency, e.g. 44100
+    :type freq: int
+    :param freq_lower: lower frequency cut-off, defaults to 50
+    :type freq_lower: int, optional
+    :param freq_higher: higher frequency cut-off, defaults to 350
+    :type freq_higher: int, optional
+    :return: HNR [dB], F0_FFT [Hz], F0_Autocorr [Hz]
+    :rtype: tuple(float, float, float)
+    """    
+    # Create timestamps for signal ``s`` 
+    time = np.arange(0, len(signal)/freq, 1/freq)
+    
+    # rFFT from Signal
+    fft = np.fft.rfft(signal)
+    
+    # Corresponding frequencies
+    freqs = np.fft.rfftfreq(len(signal), 1/freq)
+    
+    # Find fundamental frequency in region
+    f0 = np.argmax(fft[(freqs > freq_lower) & (freqs < freq_higher)])
+    f0 = freqs[f0+len(freqs[freqs <= freq_lower])]
+    
+    # Autocorrelation using fft
+    R = np.fft.irfft(fft.conj()*fft)
+    
+    # Find peaks in autocorrelation
+    p = find_peaks(R)[0]
+    # Remove first peak artifacts
+    p = p[1:] if p[0] < 10 else p
+    
+    # Compute HNR for peaks that are higher than minimum frequency (freq_lower)
+    hnr = [10 * np.log10(R[pi] / (R[0]-R[pi])) for pi in p if 1/time[pi] > freq_lower]
+
+    return np.max(hnr), f0, 1/time[p[np.argmax(hnr)]]
+
+def cepstralPeakProminence(signal, freq, freq_lower=70, freq_higher=350, plot=False):
+    """Computes cepstral peak prominence from signal using Fourier transformations.
+
+    Steps:
+        1) Compute FFT from signal
+        2) Compute fundamental frequency from power spectrum
+        3) Compute cepstrum from FFT
+        4) Find maximum peak in cepstrum
+        5) Find corresponding quefrency
+        6) Fit line to cepstrum
+        7) Compute distance from peak to line --> Cepstral Peak Prominence
+
+    :param signal: audio signal
+    :type signal: numpy.ndarray
+    :param freq: sampling rate/frequency, e.g. 44100
+    :type freq: int
+    :param freq_lower: lower frequency cut-off, defaults to 70
+    :type freq_lower: int, optional
+    :param freq_higher: higher frequency cut-off, defaults to 350
+    :type freq_higher: int, optional
+    :param plot: plots the cepstrum, the line and the peak prominence, defaults to False
+    :type plot: bool, optional
+    :return: CPP [dB], F0_FFT [Hz], F0_Cepstrum [Hz]
+    :rtype: tuple(float, float, float)
+    """    
+    # Create timestamps for signal ``s`` 
+    time = np.arange(0, len(signal)/freq, 1/freq)
+    
+    # rFFT from Signal
+    fft = np.fft.rfft(signal)
+    
+    # Corresponding frequencies
+    freqs = np.fft.rfftfreq(len(signal), 1/freq)
+    
+    # Find fundamental frequency in region
+    f0 = np.argmax(fft[(freqs > freq_lower) & (freqs < freq_higher)])
+    f0 = freqs[f0+len(freqs[freqs <= freq_lower])]
+    
+    # Compute quefrencies and cepstrum
+    cepstrum = np.fft.irfft(np.log10(np.abs(fft)))
+    cepstrum = cepstrum[:len(cepstrum)//2]
+    quefrencies = time[:len(time)//2]
+    
+    # Remove artifacts from beginning
+    cepstrum[quefrencies < 0.001] = 0
+    
+    # Fit a line to cepstrum
+    m, b = curve_fit(lin, quefrencies, cepstrum)[0]
+    
+    # Find cepstrum peak
+    p = np.argmax(cepstrum)
+    
+    # Find fundamental frequency from cepstrum
+    quefrency = time[p]
+    f0_q = 1/quefrency
+    
+    # Compute CPP (distance cepstrum peak to fitted line)
+    cpp = cepstrum[p]-lin(time[p],m,b)
+    
+    if plot:
+        plt.figure()
+        plt.plot(quefrencies, cepstrum)
+        plt.plot(quefrencies, lin(quefrencies, m, b), c='k')
+        plt.plot([quefrency, quefrency], [lin(time[p],m,b), cepstrum[p]])
+        plt.xlim([quefrency-.002, quefrency+.002])
+    
+    return -10 * np.log10(cpp), f0, f0_q
+
 class Signal:
     def __init__(self, raw_signal, dt=1/4000, verbose=True):
         r"""Inits the signal class with the raw signal, e.g. audio data or glottal area waveform.

@@ -17,6 +17,7 @@ from glob import glob
 from os.path import isdir
 import os
 from datetime import datetime
+from scipy.io.wavfile import read
 
 # Own scripts
 from openhsv.analysis.nn import Analysis
@@ -82,7 +83,7 @@ class OpenHSV (QWidget):
         # No analysis has been performed here...
         self.analysis = None
 
-        self.setWindowTitle("openHSV v.0.5")
+        self.setWindowTitle("openHSV v.0.6")
         self.setGeometry(100, 100, 800, 800)
 
         # Setup layout
@@ -109,6 +110,8 @@ class OpenHSV (QWidget):
         ay = self.audio.getPlotItem().getAxis('left')
         ay.setTicks([[(-1, '  audio'), (1, '  reference')]])
 
+        # _, self.fake_reference = read(r"D:\Research\Phoniatrie\HSE\Sprechstunde\20200206_Kist\20200206_150030_Kist_Andreas.wav")
+
 
         # F0
         self.f0_item = pg.TextItem("xxx Hz")
@@ -123,8 +126,8 @@ class OpenHSV (QWidget):
         # Add Widgets to Layout
         icon = QLabel()
         icon_pix = QPixmap("openhsv/openhsv_logo.png")
-        icon.setFixedHeight(50)
-        icon.setPixmap(icon_pix.scaled(160, 50, Qt.KeepAspectRatio))
+        icon.setFixedHeight(40)
+        icon.setPixmap(icon_pix.scaled(178, 40, Qt.KeepAspectRatio))
         self.l.addWidget(icon, 0, 0, 1, 1)
 
         # self.b3 = QPushButton("New patient")
@@ -473,6 +476,8 @@ class OpenHSV (QWidget):
         :type data: numpy.ndarray
         """
         self.audioCurve1.setData(data[:, 0]+1)
+        # Fake reference signal
+        # self.audioCurve1.setData(self.fake_reference[:len(data[:,0]),0]+1)
         self.audioCurve2.setData(data[:, 1]-1)
 
         self.audioQueue.put(data.copy())
