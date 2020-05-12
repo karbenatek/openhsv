@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import QWidget, QGridLayout
 import pyqtgraph as pg
 import numpy as np
 from scipy.signal import find_peaks, filtfilt, butter
+from scipy.optimize import curve_fit
 from datetime import datetime
 
 def _find_bottom(x, t=0.02):
@@ -24,6 +25,23 @@ def _find_bottom(x, t=0.02):
             
     return i
 
+def _lin(x, m, b):
+    """Linear function
+
+    .. math:
+        f(x) = m \cdot x + b
+
+    :param x: x
+    :type x: int, float or numpy.ndarray
+    :param m: slope
+    :type m: int, float
+    :param b: intercept
+    :type b: int, float
+    :return: eval
+    :rtype: int, float or numpy.ndarray
+    """    
+    return m*x+b
+
 """
     ***************
     Event detection
@@ -45,7 +63,7 @@ def detectMaximaMinima(s, distance=5, rel_height=.35, use_prominence=True):
     :rtype: tuple(numpy.ndarray, numpy.ndarray)
     """
     
-    if use_prominance:
+    if use_prominence:
         p_max = find_peaks(s, prominence=.5)[0]
         p_min = find_peaks(-s, prominence=.5)[0]
 
@@ -86,8 +104,8 @@ def detectOpeningAndClosingEvents(signal, p_max, t=0.02):
         higher_bound = p_max[i+1] if i < len(p_max)-1 else len(signal)
 
         # Run down the signal hill until bottom is found
-        starts_opening = _find_bottom(y[lower_bound:p_max[i]][::-1], t=t)
-        stops_closing  = _find_bottom(y[p_max[i]:higher_bound], t=t)
+        starts_opening = _find_bottom(signal[lower_bound:p_max[i]][::-1], t=t)
+        stops_closing  = _find_bottom(signal[p_max[i]:higher_bound], t=t)
 
         # Correct for location
         starts_opening = p_max[i]-starts_opening-1
@@ -96,7 +114,7 @@ def detectOpeningAndClosingEvents(signal, p_max, t=0.02):
         opening.append(starts_opening)
         closing.append(stops_closing)
 
-    return opening, closing
+    return np.asarray(opening), np.asarray(closing)
 
 def computeOpenAndClosedIntervals(t, opened, closed):
     """computes the opened and closed intervals during each cycle.
@@ -110,10 +128,11 @@ def computeOpenAndClosedIntervals(t, opened, closed):
     :return: duration of opening and closed phases
     :rtype: tuple(list(float), list(float))
     """    
-    open_t = [self.t[c]-self.t[o] for o, c in zip(opened, closed)]
-    closed_t = [self.t[o]-self.t[c] for o, c in zip(opened[1:], closed)]
+    open_t = [t[c]-t[o] for o, c in zip(opened, closed)]
+    closed_t = [t[o]-t[c] for o, c in zip(opened[1:], closed)]
+    closed_t.append(t[-1]-t[closed[-1]])
 
-    return open_t, closed_t
+    return np.asarray(open_t), np.asarray(closed_t)
 
 def computeOCandCOTransitions(t, opened, closed, p_max):
     """Computes Open->Closed (OC) and Closed-Open (CO) transitions.
@@ -129,8 +148,8 @@ def computeOCandCOTransitions(t, opened, closed, p_max):
     :return: CO and OC durations
     :rtype: tuple(numpy.ndarray, numpy.ndarray)
     """    
-    CO = np.array([self.t[p]-self.t[o]  for o, p in zip(opened, p_max)])
-    OC = np.array([self.t[c]-self.t[p]  for c, p in zip(closed, p_max)])
+    CO = np.array([t[p]-t[o]  for o, p in zip(opened, p_max)])
+    OC = np.array([t[c]-t[p]  for c, p in zip(closed, p_max)])
 
     return CO, OC
 
@@ -232,7 +251,7 @@ def speedQuotient(CO, OC):
     """    
     sq = CO / OC
 
-    return np.mean(SQ)
+    return np.mean(sq)
 
 def F0fromCycles(T, verbose=False):
     r"""determine fundamental frequency (F0) based on period lengths
@@ -252,6 +271,12 @@ def F0fromCycles(T, verbose=False):
         print("F0: {:.2f} ± {:.2f} Hz".format(f0, f0_std))
         
     return f0, f0_std
+
+def F0fromFFT(fft, freqs, freq_lower=75, freq_higher=500):
+    f0 = np.argmax(fft[(freqs > freq_lower) & (freqs < freq_higher)])
+    f0 = freqs[f0+len(freqs[freqs <= freq_lower])]
+
+    return f0
 
 def meanJitter(T):
     r"""Calculating the mean jitter in ms from signal periods
@@ -422,7 +447,7 @@ def cepstralPeakProminence(signal, freq, freq_lower=70, freq_higher=350, plot=Fa
     cepstrum[quefrencies < 0.001] = 0
     
     # Fit a line to cepstrum
-    m, b = curve_fit(lin, quefrencies, cepstrum)[0]
+    m, b = curve_fit(_lin, quefrencies, cepstrum)[0]
     
     # Find cepstrum peak
     p = np.argmax(cepstrum)
@@ -432,13 +457,13 @@ def cepstralPeakProminence(signal, freq, freq_lower=70, freq_higher=350, plot=Fa
     f0_q = 1/quefrency
     
     # Compute CPP (distance cepstrum peak to fitted line)
-    cpp = cepstrum[p]-lin(time[p],m,b)
+    cpp = cepstrum[p]-_lin(time[p],m,b)
     
     if plot:
         plt.figure()
         plt.plot(quefrencies, cepstrum)
-        plt.plot(quefrencies, lin(quefrencies, m, b), c='k')
-        plt.plot([quefrency, quefrency], [lin(time[p],m,b), cepstrum[p]])
+        plt.plot(quefrencies, _lin(quefrencies, m, b), c='k')
+        plt.plot([quefrency, quefrency], [_lin(time[p],m,b), cepstrum[p]])
         plt.xlim([quefrency-.002, quefrency+.002])
     
     return -10 * np.log10(cpp), f0, f0_q
@@ -481,7 +506,7 @@ class Signal:
         self.cepstrum = None
         self.cepstrumfreq = None
 
-    def computeFFT(self, use_filtered_signal=True, use_hanning=True):
+    def computeFFT(self, use_filtered_signal=True, use_hanning=True, lowpass_filter=20):
         signal = (self.filtered_signal if use_filtered_signal else self.raw_signal).copy()
 
         if use_hanning:
@@ -490,9 +515,12 @@ class Signal:
         self.fft = np.fft.rfft(signal)
         self.fftfreq = np.fft.rfftfreq(len(signal), d=self.dt)
 
+        if lowpass_filter:
+            self.fft[self.fftfreq < lowpass_filter] = 0
+
     def computeCepstrum(self):
         assert self.fft is not None, "before calculating the cepstrum, first calculate the FFT"
-        self.cepstrum = np.fft.ifft(np.log(np.abs(self.fft))).real
+        self.cepstrum = np.fft.ifft(np.log10(np.abs(self.fft))).real
         return self.cepstrum
 
     def filterSignal(self, cutoff_frequency=.1):
@@ -536,6 +564,7 @@ class Signal:
         signal = self.filtered_signal if use_filtered_signal else self.signal
         self.opening, self.closing = detectOpeningAndClosingEvents(signal, self.raw_peaks[0])
         self.t_open, self.t_closed = computeOpenAndClosedIntervals(self.t, self.opening, self.closing)
+        self.CO, self.OC = computeOCandCOTransitions(self.t, self.opening, self.closing, self.raw_peaks[0])
 
     def getPowerSpectrum(self):
         """Returns power spectrum from signal
@@ -552,6 +581,84 @@ class Signal:
         :rtype: tuple(np.ndarray, np.ndarray)
         """        
         return self.t, self.cepstrum
+
+class Audio(Signal):
+    def __init__(self, raw_signal, dt=1/80000, use_filtered_signal=True, use_hanning=True, verbose=False):
+        super().__init__(raw_signal=raw_signal, dt=dt, verbose=verbose)
+        self.computeFFT(use_filtered_signal=False, use_hanning=use_hanning)
+        self.computeCepstrum()
+        self.filterSignal()
+        self.detectCycles(use_filtered_signal=use_filtered_signal, peak='max')
+
+    def filterSignal(self, freq_range=10):
+        f0 = F0fromFFT(self.fft, self.fftfreq)
+
+        fft_ = self.fft.copy()
+        fft_[self.fftfreq < f0-freq_range] = 0
+        fft_[self.fftfreq > f0+freq_range] = 0
+
+        self.filtered_signal = np.fft.irfft(fft_)
+
+    def computeParameters(self, use_filtered_signal=False):
+        params = {}
+
+        params['Mean Jitter'] = meanJitter(self.T)
+        params['Jitter%'] = jitterPercent(self.T)
+        params['Mean Shimmer'] = meanShimmer(self.A)
+        params['Shimmer%'] = shimmerPercent(self.A)
+
+        s = self.filtered_signal if use_filtered_signal else self.raw_signal
+
+        HNR = harmonicNoiseRatio(s, 1/self.dt)
+
+        if self.verbose:
+            print(HNR)
+
+        params['HNR'] = HNR[0]
+
+        CPP = cepstralPeakProminence(s, 1/self.dt)
+
+        if self.verbose:
+            print(CPP)
+
+        params['CPP'] = CPP[0]
+
+        params['F0_Cycles'] = F0fromCycles(self.T)[0]
+        params['F0_Spectrum'] = HNR[1]
+        params['F0_Autocorr'] = HNR[2]
+        params['F0_Cepstrum'] = CPP[2]
+
+        return params
+
+class GAW(Signal):
+    def __init__(self, raw_signal, dt=1/80000, cutoff_frequency=.1, use_filtered_signal=True, use_hanning=True, verbose=False):
+        super().__init__(raw_signal=raw_signal, dt=dt, verbose=verbose)
+        self.filterSignal(cutoff_frequency=cutoff_frequency)
+        self.detectCycles(use_filtered_signal=use_filtered_signal)
+        self.detectPhases(use_filtered_signal=use_filtered_signal)
+        self.computeFFT(use_filtered_signal=use_filtered_signal, use_hanning=use_hanning)
+        self.computeCepstrum()
+
+    def computeParameters(self):
+        params = {}
+
+        params['Mean Jitter'] = meanJitter(self.T)
+        params['Jitter%'] = jitterPercent(self.T)
+        params['Mean Shimmer'] = meanShimmer(self.A)
+        params['Shimmer%'] = shimmerPercent(self.A)
+
+        params['F0_Cycles'] = F0fromCycles(self.T)[0]
+        params['F0_Spectrum'] = F0fromFFT(self.fft, self.fftfreq, 75, 500)
+
+        params['Opening Quotient'] = openQuotient(self.t_open, self.t_closed)
+        params['Closing Quotient'] = closingQuotient(self.CO, self.OC)
+        params['Speed Quotient'] = speedQuotient(self.CO, self.OC)
+        params['Asymmetry Quotient'] = asymmetryQuotient(self.CO, self.OC)
+        params['Rate Quotient'] = rateQuotient(self.CO, self.OC, self.t_closed)
+        params['Speed Index'] = speedIndex(self.CO, self.OC, self.t_open)
+
+        return params
+
 
 class AnalysisPlatform(QWidget):
     def __init__(self, raw_signal, dt):
