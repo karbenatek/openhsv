@@ -6,6 +6,18 @@ from scipy.optimize import curve_fit
 from datetime import datetime
 from scipy.signal import medfilt
 from numba import njit
+import matplotlib.pyplot as plt
+
+@njit
+def movingAverage(x, n=3):
+    y = np.zeros_like(x, dtype=np.float32)
+
+    for i in range(x.shape[0]):
+        low = i-n if i > n else 0
+
+        y[i] = np.mean(x[low:i+1])
+
+    return y
 
 @njit
 def _find_bottom(x, t=0.02):
@@ -199,13 +211,16 @@ def F0fromAutocorrelation(signal, freq=40000):
     
     # Autocorrelation using fft
     R = np.fft.irfft(fft.conj()*fft)
-    
+
     # Find peaks in autocorrelation
-    p = find_peaks(R, prominence=True)[0]
+    p = find_peaks(R)[0]
     # Remove first peak artifacts
     p = p[1:] if p[0] < 10 else p
 
-    return freqs[p[0]]
+    # f0 = np.argmax(R[p])
+    f0 = 0
+
+    return freqs[p[f0]]
 
 
 """
@@ -400,6 +415,27 @@ def glottalGapIndex(signal, opening, epsilon=1e-9):
 
     return np.mean(ggi)
 
+def amplitudePerturbationFactor(A):
+    APF = []
+    
+    for i in range(1, len(A)):
+        APF.append(abs((A[i] - A[i-1]) / A[i]))
+
+    return np.mean(APF) * 100
+
+def amplitudePerturbationQuotient(A, k=3):
+    APQ = []
+    lim = int((k-1)/2)
+
+    for i in range(lim, len(A)-lim):
+        numer = k * A[i]
+        denom = A[i-lim:i+lim+1].sum()
+
+        APQ.append(abs(1-numer/denom))
+
+    return np.mean(APQ) * 100
+
+
 def harmonicNoiseRatio(signal, freq, freq_lower=50, freq_higher=450, filter_autocorrelation=False, epsilon=1e-9):
     """Computes Harmonic-Noise-Ratio  (HNR) using autocorrelation approximation.
     First, it computes the fundamental frequency using the power spectrum of ``signal``.
@@ -432,10 +468,6 @@ def harmonicNoiseRatio(signal, freq, freq_lower=50, freq_higher=450, filter_auto
     # Corresponding frequencies
     freqs = np.fft.rfftfreq(len(signal), 1/freq)
     
-    # Find fundamental frequency in region
-    f0 = np.argmax(abs(fft[(freqs > freq_lower) & (freqs < freq_higher)]))
-    f0 = freqs[f0+len(freqs[freqs <= freq_lower])]
-    
     # Autocorrelation using fft
     R = np.fft.irfft(fft.conj()*fft)
 
@@ -458,7 +490,7 @@ def harmonicNoiseRatio(signal, freq, freq_lower=50, freq_higher=450, filter_auto
     # Compute HNR for peaks that are higher than minimum frequency (freq_lower)
     hnr = [10 * np.log10(R[pi] / (R[0]-R[pi])) for pi in p if 1/time[pi] > freq_lower]
 
-    return np.max(hnr), f0, 1/time[p[np.argmax(hnr)]]
+    return np.max(hnr), 1/time[p[np.argmax(hnr)]]
 
 def cepstralPeakProminence(signal, freq, freq_lower=70, freq_higher=350, plot=False):
     """Computes cepstral peak prominence from signal using Fourier transformations.
@@ -466,7 +498,7 @@ def cepstralPeakProminence(signal, freq, freq_lower=70, freq_higher=350, plot=Fa
     Steps:
         1) Compute FFT from signal
         2) Compute fundamental frequency from power spectrum
-        3) Compute cepstrum from FFT
+        3) Compute cepstrum from FFT, filter with moving average (window = 3)
         4) Find maximum peak in cepstrum
         5) Find corresponding quefrency
         6) Fit line to cepstrum
@@ -495,24 +527,29 @@ def cepstralPeakProminence(signal, freq, freq_lower=70, freq_higher=350, plot=Fa
     freqs = np.fft.rfftfreq(len(signal), 1/freq)
     
     # Find fundamental frequency in region
-    f0 = np.argmax(fft[(freqs > freq_lower) & (freqs < freq_higher)])
-    f0 = freqs[f0+len(freqs[freqs <= freq_lower])]
+    f0 = np.argmax(abs(fft[(freqs > freq_lower) & (freqs < freq_higher)]))
+    f0 = freqs[f0+len(freqs[freqs <= freq_lower])] 
     
     # Compute quefrencies and cepstrum
     epsilon = 1e-9
-    cepstrum = np.fft.irfft(np.log10(np.abs(fft)+epsilon))
+    cepstrum = np.fft.irfft(np.log10(np.abs(fft)+epsilon)).real
+    cepstrum = movingAverage(cepstrum, 3)
     cepstrum = cepstrum[:len(cepstrum)//2]
     quefrencies = time[:len(time)//2]
     
     # Remove artifacts from beginning
-    cepstrum[quefrencies < 0.001] = 0
+    cepstrum[quefrencies < 0.002] = 0
+    # Remove higher real quefrencies
+    cepstrum[quefrencies > 0.02] = 0
     
     # Fit a line to cepstrum
     m, b = curve_fit(_lin, quefrencies, cepstrum)[0]
     
-    # Find cepstrum peak
+    # Find cepstrum peak around f0:
+    # qx = np.where((quefrencies > 1/(f0+20)) & (quefrencies < 1/(f0-20)))[0]
+    # p = np.argmax(cepstrum[qx[0]:qx[-1]])+qx[0]
     p = np.argmax(cepstrum)
-    
+
     # Find fundamental frequency from cepstrum
     quefrency = time[p]
     f0_q = 1/quefrency
@@ -740,8 +777,13 @@ class Audio(Signal):
         real_zp = np.asarray(real_zp)
 
         self.raw_peaks = real_zp
+
+        # Compute amplitudes
         self.A = self._A(real_zp)
+
+        # Compute cycle durations
         self.T = np.diff(self.t[real_zp])
+        self.T = self.T[self.T > 0]
 
     def filterSignal(self, freq_range=20):
         self.F0 = F0fromFFT(self.fft, self.fftfreq)
@@ -760,13 +802,12 @@ class Audio(Signal):
 
     def computeParameters(self, use_filtered_signal=False):
         params = {}
+        s = self.filtered_signal if use_filtered_signal else self.raw_signal
 
         params['Mean Jitter'] = meanJitter(self.T)
         params['Jitter%'] = jitterPercent(self.T)
         params['Mean Shimmer'] = meanShimmer(self.A)
         params['Shimmer%'] = shimmerPercent(self.A)
-
-        s = self.filtered_signal if use_filtered_signal else self.raw_signal
 
         HNR = harmonicNoiseRatio(s, 1/self.dt)
 
@@ -783,9 +824,14 @@ class Audio(Signal):
         params['CPP'] = CPP[0]
 
         params['F0_Cycles'] = F0fromCycles(self.T)[0]
-        params['F0_Spectrum'] = HNR[1]
-        params['F0_Autocorr'] = HNR[2]
-        params['F0_Cepstrum'] = CPP[2]
+        params['F0_Spectrum'] = F0fromFFT(self.fft, self.fftfreq)
+        params['F0_Autocorr'] = HNR[1] # F0 from autocorrelation, maybe direct function?
+        params['F0_Cepstrum'] = CPP[2] # F0 from quefrency peak
+        params['APF'] = amplitudePerturbationFactor(A)
+        params['APQ3'] = amplitudePerturbationQuotient(A, k=3)
+        params['APQ5'] = amplitudePerturbationQuotient(A, k=5)
+        params['APQ11'] = amplitudePerturbationQuotient(A, k=11)
+
 
         return params
 
