@@ -8,6 +8,12 @@ from scipy.signal import medfilt
 from numba import njit
 import matplotlib.pyplot as plt
 
+"""
+    ***************
+    Helper functions
+    ***************
+"""
+
 @njit
 def movingAverage(x, n=3):
     y = np.zeros_like(x, dtype=np.float32)
@@ -283,9 +289,9 @@ def rateQuotient(CO, OC, t_closed):
     :return: rate quotient (RQ), a.u.
     :rtype: float
     """    
-    rq = np.mean((t_closed + CO) / OC)
+    rq = (t_closed + CO) / OC
 
-    return rq
+    return np.mean(rq), np.std(rq) 
 
 def speedIndex(CO, OC, t_open):
     """Speed Index (SI)
@@ -301,7 +307,7 @@ def speedIndex(CO, OC, t_open):
     """    
     si = (CO-OC) / t_open
 
-    return np.mean(si)
+    return np.mean(si), np.std(si)
 
 def speedQuotient(CO, OC):
     """Speed Quotient (SQ)
@@ -315,7 +321,7 @@ def speedQuotient(CO, OC):
     """    
     sq = CO / OC
 
-    return np.mean(sq)
+    return np.mean(sq), np.std(sq)
 
 def meanJitter(T):
     r"""Calculating the mean jitter in ms from signal periods
@@ -413,7 +419,7 @@ def glottalGapIndex(signal, opening, epsilon=1e-9):
             np.min(signal[os:oe+1]) / (np.max(signal[os:oe+1]) + epsilon)
         )
 
-    return np.mean(ggi)
+    return np.mean(ggi), np.std(ggi)
 
 def amplitudePerturbationFactor(A):
     APF = []
@@ -421,7 +427,7 @@ def amplitudePerturbationFactor(A):
     for i in range(1, len(A)):
         APF.append(abs((A[i] - A[i-1]) / A[i]))
 
-    return np.mean(APF) * 100
+    return np.mean(APF) * 100, np.std(APF) * 100
 
 def amplitudePerturbationQuotient(A, k=3):
     APQ = []
@@ -433,7 +439,35 @@ def amplitudePerturbationQuotient(A, k=3):
 
         APQ.append(abs(1-numer/denom))
 
-    return np.mean(APQ) * 100
+    return np.mean(APQ) * 100, np.std(APQ) * 100
+
+def amplitudeQuotient(signal, opening):
+    AQ = []
+
+    dSignal = np.insert(np.diff(signal), 0, 0)
+
+    for i, j in zip(opening, opening[1:]):
+        m = min(dSignal[i:j])
+        Ai = max(signal[i:j]) - min(signal[i:j])
+
+        AQ.append(Ai/m)
+
+
+    return np.mean(AQ), np.std(AQ)
+
+
+def stiffness(signal, opening):
+    S = []
+
+    dSignal = np.insert(np.diff(signal), 0, 0)
+
+    for i, j in zip(opening, opening[1:]):
+        m = max(dSignal[i:j])
+        Ai = max(signal[i:j]) - min(signal[i:j])
+
+        S.append(m/Ai)
+
+    return np.mean(S), np.std(S)
 
 
 def harmonicNoiseRatio(signal, freq, freq_lower=50, freq_higher=450, filter_autocorrelation=False, epsilon=1e-9):
