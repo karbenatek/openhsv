@@ -15,7 +15,14 @@ class Midline:
         
         self.maxima = None if maxima is None else maxima
     
-    def find(self, method='pca', time_range=5):
+    def predict(self, method='pca', time_range=5):
+        """Predicts midline with given method on each GAW peak.
+
+        :param method: [description], defaults to 'pca'
+        :type method: str, optional
+        :param time_range: [description], defaults to 5
+        :type time_range: int, optional
+        """
         if self.maxima is None:
             self.maxima = find_peaks(self.gaw)[0]
             
@@ -259,6 +266,15 @@ def principalComponents(im, use_2nd=False):
     return np.tan(angle), intercept
 
 def _midline(im, method='pca'):
+    """Helper function to compute midline from given image
+
+    :param im: image
+    :type im: numpy.ndarray
+    :param method: method used for midline prediction (pca, moments), defaults to 'pca'
+    :type method: str, optional
+    :return: slope and intercept of midline
+    :rtype: tuple(float, float)
+    """
     if method.lower() == 'pca':
         a, b = principalComponents(im)
         if abs(a) < 1:
@@ -284,7 +300,7 @@ if __name__ == '__main__':
 
     # Create analysis class and show widget
     M = Midline(seg)
-    M.find()
+    M.predict()
 
     # Show segmentation with predicted midline
     im = pg.image(seg.transpose(0, 2, 1), 
