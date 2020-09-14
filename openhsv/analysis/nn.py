@@ -4,6 +4,9 @@ import pyqtgraph as pg
 from skimage.color import rgb2gray
 import numpy as np
 from tqdm import tqdm
+from openhsv.analysis.midline import Midline
+from openhsv.analysis.parameters import GAW
+from openhsv.gui.table import Table
 
 def _divpad(im, multiple_of=32, cval=0):
     """preprocesses an cropped image for feeding into neural network.
@@ -150,6 +153,75 @@ class Analysis(QWidget):
         self.seg.setImage(pr.transpose((1, 0)))
         self.curve.setData(self.GAW[-40:])
 
+    def computeParameters(self, dt=1/4000, debug=False):
+        """Compute parameters from GAW
+
+        :param dt: sampling time in seconds, defaults to 1/4000
+        :type dt: float, optional
+        :param debug: shows debugging information and plots, defaults to False
+        :type debug: bool, optional
+        """
+        # Convert raw segmentations to binary masks
+        seg = np.asarray(self.segmentations).round().astype(np.bool)
+
+        # Predict midline from segmentation
+        M = Midline(seg)
+        M.predict()
+
+        # Use midline for left and right GAW
+        gaws = M.side()
+        left_gaw  = gaws[..., 0]
+        right_gaw = gaws[..., 1]
+
+        # Compute and show values
+        gaw = GAW(seg.sum((1,2)), 
+            use_filtered_signal=False, 
+            use_hanning=False, 
+            dt=dt)
+
+        gaw.setLeftRightGAW(left_gaw, right_gaw)
+        params = gaw.computeParameters()
+
+        # Create summary table for parameters
+        self.t = Table(params)
+        self.t.show()
+
+        if debug:
+            # Show complete segmentation with midline
+            im = pg.image(seg.transpose(0, 2, 1), 
+                        title="Segmentation with midline")
+
+            line = pg.LineSegmentROI([M.coordinates[0, :2],
+                                    M.coordinates[0, 2:],],
+                                    pen="y")
+
+            im.getView().addItem(line)
+
+            # Show complete GAW plot with detected cycles
+            gaw_plot = pg.plot(gaw.t, gaw.raw_signal,
+                title="GAW with cycles")
+
+            cs = [(241, 196, 15), (231, 76, 60)]
+            i = 0
+
+            for o, c in zip(gaw.opening, gaw.closing):
+                i1 = pg.PlotCurveItem(gaw.t[o:c], np.zeros_like(gaw.t[o:c]))
+                i2 = pg.PlotCurveItem(gaw.t[o:c], gaw.raw_signal[o:c])
+                between = pg.FillBetweenItem(i1, i2, brush=cs[i % len(cs)])
+                gaw_plot.getPlotItem().addItem(between)
+                i += 1
+
+            # Show left and right gaw
+            LR_plot = pg.plot(title="Left and right GAW")
+            LR_plot.plot(gaw.t, left_gaw)
+            LR_plot.plot(gaw.t, -right_gaw)
+
+        # Compute and show phonovibrogram
+        pvg = M.pvg()
+        pg.image(pvg, title="Phonovibrogram")
+
+        return params
+
     def get(self):
         """returns GAW and segmentation maps for video
         
@@ -172,5 +244,6 @@ if __name__ == '__main__':
     a = Analysis(app)
     a.show()
     a.segmentSequence(vid)
+    a.computeParameters(dt=1/1000, debug=True)
 
     app.exec_()

@@ -600,6 +600,33 @@ def cepstralPeakProminence(signal, freq, freq_lower=70, freq_higher=350, plot=Fa
     
     return -10 * np.log10(cpp+epsilon), f0, f0_q
 
+def phaseAsymmetryIndex(left_gaw, right_gaw, opening):
+    PAI = []
+
+    for i0, i1 in zip(opening, opening[1:]):
+        L = left_gaw[i0:i1+1]
+        R = right_gaw[i0:i1+1]
+
+        PAI.append(
+            abs(np.argmin(L) - np.argmin(R)) / len(L)
+        )
+
+    return np.mean(PAI), np.std(PAI)
+
+def amplitudeSymmetryIndex(left_gaw, right_gaw, opening, epsilon=1e-5):
+    ASI = []
+
+    for i0, i1 in zip(opening, opening[1:]):
+        L = max(left_gaw[i0:i1+1])
+        R = max(right_gaw[i0:i1+1])
+
+        ASI.append(
+            min(L, R) / (max(L, R)+epsilon)
+        )
+
+    return np.mean(ASI), np.std(ASI)
+
+
 class Signal:
     def __init__(self, raw_signal, dt=1/4000, verbose=True):
         r"""Inits the signal class with the raw signal, e.g. audio data or glottal area waveform.
@@ -869,6 +896,7 @@ class Audio(Signal):
 
         return params
 
+
 class GAW(Signal):
     def __init__(self, raw_signal, dt=1/4000, cutoff_frequency=.1, use_filtered_signal=True, use_hanning=True, verbose=False):
         super().__init__(raw_signal=raw_signal, dt=dt, verbose=verbose)
@@ -879,6 +907,13 @@ class GAW(Signal):
         self.detectPhases(use_filtered_signal=use_filtered_signal)
         self.computeFFT(use_filtered_signal=use_filtered_signal, use_hanning=use_hanning)
         self.computeCepstrum()
+
+        self.left_gaw = None
+        self.right_gaw = None
+
+    def setLeftRightGAW(self, left_gaw, right_gaw):
+        self.left_gaw = left_gaw
+        self.right_gaw = right_gaw
 
     def computeParameters(self):
         params = {}
@@ -899,6 +934,12 @@ class GAW(Signal):
         params['Rate Quotient'] = rateQuotient(self.CO, self.OC, self.t_closed)
         params['Speed Index'] = speedIndex(self.CO, self.OC, self.t_open)
         params['Glottal Gap Index'] = glottalGapIndex(self.raw_signal, self.opening)
+
+        # Symmetry measures if left and right GAWs are available
+        if type(self.left_gaw) != None and type(self.right_gaw) != None:
+            params['Amplitude Symmetry Index'] = amplitudeSymmetryIndex(self.left_gaw, self.right_gaw, self.opening)
+            params['Phase Asymmetry Index'] = phaseAsymmetryIndex(self.left_gaw, self.right_gaw, self.opening)
+            
 
         return params
 

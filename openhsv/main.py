@@ -22,3 +22,4 @@ if __name__ == '__main__':
     w.updateRangeIndicator()
 
     sys.exit(app.exec_())
+    

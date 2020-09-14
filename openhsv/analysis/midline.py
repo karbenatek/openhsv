@@ -7,6 +7,16 @@ from openhsv.analysis.pvg import compute_pvg, get_labels, create_maps
 
 class Midline:
     def __init__(self, seg, maxima=None):
+        """Midline prediction module.
+
+        Midline is predicted based on segmentation from neural net
+        for each peak. Midline is interpolated between peaks.
+
+        :param seg: [description]
+        :type seg: [type]
+        :param maxima: [description], defaults to None
+        :type maxima: [type], optional
+        """
         self.seg = seg.astype(np.bool)
         self.gaw = self.seg.sum((1,2))
         self.coordinates = np.zeros((len(self.gaw), 4))   
@@ -18,15 +28,18 @@ class Midline:
     def predict(self, method='pca', time_range=5):
         """Predicts midline with given method on each GAW peak.
 
-        :param method: [description], defaults to 'pca'
+        :param method: 'pca' or 'moments', defaults to 'pca'
         :type method: str, optional
-        :param time_range: [description], defaults to 5
+        :param time_range: time range around peak to improve prediction, defaults to 5
         :type time_range: int, optional
         """
+        # if no peaks were provided through different method
         if self.maxima is None:
             self.maxima = find_peaks(self.gaw)[0]
             
+        # Iterate over peaks
         for p in self.maxima:
+            # Set lower and higher bounds around each peak
             low = p-time_range if p-time_range >= 0 else 0
             high = p+time_range+1 if p+time_range+1 <= len(self.gaw) else len(self.gaw)
             
@@ -55,16 +68,22 @@ class Midline:
                                         self.line_properties[self.maxima, i])    
         
     def side(self):
+        """Returns left and right GAW based on midline in each frame
+
+        :return: left and right GAW as array T x 2
+        :rtype: numpy.ndarray
+        """
         # Iterate over frames
         for frame in range(self.side_gaws.shape[0]):
             # Get midline for frame
             coef, intercept = self.line_properties[frame]
+
             # Create Left/Right map for frame
             LR = create_maps(self.seg.shape[1:], coef, np.array([intercept]))[0]
 
             # Compute segmented pixels for left and right side, respectively
-            self.side_gaws[frame, 0] = ((LR == -1) & self.seg[frame]).sum()
-            self.side_gaws[frame, 1] = ((LR == +1) & self.seg[frame]).sum()
+            self.side_gaws[frame, 0] = ((LR >= 0) & self.seg[frame]).sum()
+            self.side_gaws[frame, 1] = ((LR < 0) & self.seg[frame]).sum()
 
         return self.side_gaws
 
@@ -72,10 +91,10 @@ class Midline:
     def pvg(self, steps=64):
         """Computes PVG in discrete steps for each side.
 
-        :param steps: [description], defaults to 64
+        :param steps: resolution along each axis, defaults to 64
         :type steps: int, optional
-        :return: [description]
-        :rtype: [type]
+        :return: phonovibrogram as T x steps*2
+        :rtype: numpy.ndarray
         """
         labels = np.zeros_like(self.seg, dtype=np.int32)
         

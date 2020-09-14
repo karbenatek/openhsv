@@ -28,6 +28,7 @@ from openhsv.gui.settings import Settings
 from openhsv.gui.patient import Patient
 from openhsv.gui.waiting import Waiting
 from openhsv.gui.misc import fullScreenPreview
+from openhsv.gui.table import Table
 
 
 class OpenHSV (QWidget):
@@ -140,6 +141,11 @@ class OpenHSV (QWidget):
         self.b4.setFixedWidth(150)
         self.l.addWidget(self.b4, 0, 1, 1, 1, Qt.AlignRight)
 
+        self.b5 = QPushButton("Find patient")
+        self.b5.clicked.connect(self.findpatient)
+        self.b5.setFixedWidth(150)
+        self.l.addWidget(self.b5, 1, 1, 1, 1, Qt.AlignRight)
+
         LabelCamera = QLabel("Camera")
         LabelCamera.setFixedHeight(30)
         LabelAudio = QLabel("Audio")
@@ -218,6 +224,9 @@ class OpenHSV (QWidget):
 
         self.updateRangeIndicator()
         self.initSettings()
+
+    def findpatient(self):
+        pass
 
     def showMaximized(self):
         """shows the window maximized and updates the range indicator
@@ -696,6 +705,7 @@ class OpenHSV (QWidget):
         self.app.processEvents()
 
         self.progess.setEnabled(True)
+        
         self.a = Analysis()
         self.a.show()
         self.a.raise_()
@@ -734,12 +744,17 @@ class OpenHSV (QWidget):
         if self.verbose:
             print("Total ims: ", len(ims))
 
+        # Show parameters
+        params = self.a.computeParameters()
+
         # Save metadata
         self.analysis = self.a.get()
         self.analysis['start_frame'] = start
         self.analysis['end_frame'] = end
         self.analysis['roi_pos'] = [int(i) for i in self.roi.pos()]
         self.analysis['roi_size'] = [int(i) for i in self.roi.size()]
+        self.analysis['parameters'] = params        
+        
 
     def save(self, save_last_seconds=4):
         """Saves the recorded and selected data. In particular, we save
