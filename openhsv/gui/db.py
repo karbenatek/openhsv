@@ -13,6 +13,7 @@ class Table(QWidget):
     def __init__(self, folder):
         super().__init__()
         self.l = QGridLayout(self)
+        self.setMinimumWidth(700)
 
         self.surname = QLineEdit()
         self.surname.setPlaceholderText("Last name, e.g. Smith")
@@ -44,6 +45,8 @@ class Table(QWidget):
         # Iterate over metadata files
         for ii, fn in enumerate(self.fns):
             meta = json.load(open(fn))
+
+            meta['Patient']['date'] = meta['Date']
 
             # Store patient metadata
             self.patients.append(meta['Patient'])

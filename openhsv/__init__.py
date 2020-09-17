@@ -29,6 +29,7 @@ from openhsv.gui.patient import Patient
 from openhsv.gui.waiting import Waiting
 from openhsv.gui.misc import fullScreenPreview
 from openhsv.gui.table import Table
+from openhsv.gui.db import DB
 
 
 class OpenHSV (QWidget):
@@ -226,7 +227,8 @@ class OpenHSV (QWidget):
         self.initSettings()
 
     def findpatient(self):
-        pass
+        self.db = DB(self.base_folder)
+        self.db.show()
 
     def showMaximized(self):
         """shows the window maximized and updates the range indicator
