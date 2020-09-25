@@ -1,7 +1,7 @@
 import numpy as np
 from numba import njit, prange
 
-def find_orthogonal_points(x_low, x_high, coef, intercept, steps=64):
+def _find_orthogonal_points(x_low, x_high, coef, intercept, steps=64):
     """
     Find orthogonal points equally spaced along the main anterior-posterior axis.
     Returns intercept and coefficient for linear equation.
@@ -29,7 +29,7 @@ def find_orthogonal_points(x_low, x_high, coef, intercept, steps=64):
 
 
 @njit
-def create_maps(im_shape, c, i):
+def _create_maps(im_shape, c, i):
     """
     Creates distance maps for all orthogonal axes
     :param im_shape: tuple, image shape of video
@@ -48,7 +48,7 @@ def create_maps(im_shape, c, i):
 
 
 @njit
-def find_parts(im_shape, labels_parallel, labels_LR):
+def _find_parts(im_shape, labels_parallel, labels_LR):
     """
     Creates a label map depending on distance to axis and left or right
     axis of anterior posterior axis.
@@ -76,32 +76,43 @@ def find_parts(im_shape, labels_parallel, labels_LR):
     return labels
 
 
-def get_labels(x_low, x_high, coef, intercept, image_shape, debug=False, steps=64):
-    """
-    Lazy function for getting labels based on the AP axis
-    :param x: ndarray
-    :param y: ndarray
-    :param coef: float, coefficient of linear regression AP
-    :param intercept: float, intercept of linear regression AP
-    :param steps: int, steps between A and P
-    :return: label map
-    """
-    xs, ys, coef_orth, intercepts_orth = find_orthogonal_points(x_low, x_high, coef, intercept, steps=steps)
-    labels_parallel = create_maps(image_shape, coef_orth, intercepts_orth)
-    labels_LR = create_maps(image_shape, coef, np.array([intercept]))[0]
+def get_labels(x_low, x_high, coef, intercept, image_shape, steps=64):
+    r"""Function for getting left/right step-id'd labels based on the AP axis
 
-    labels = find_parts(image_shape, labels_parallel, labels_LR)
+    :param x_low: lower x coordinate 
+    :type x_low: float
+    :param x_high: higher x coordinate
+    :type x_high: float
+    :param coef: coefficient of linear regression AP
+    :type coef: float
+    :param intercept: intercept of linear regression AP
+    :type intercept: float
+    :param image_shape: image size (HxW) for label
+    :type image_shape: tuple(int, int)
+    :param steps: steps between A and P
+    :type steps: int
+    :return: label map
+    :rtype: numpy.ndarray
+    """
+    xs, ys, coef_orth, intercepts_orth = _find_orthogonal_points(x_low, x_high, coef, intercept, steps=steps)
+    labels_parallel = _create_maps(image_shape, coef_orth, intercepts_orth)
+    labels_LR = _create_maps(image_shape, coef, np.array([intercept]))[0]
+
+    labels = _find_parts(image_shape, labels_parallel, labels_LR)
 
     return labels
     
 def compute_pvg(s, labels, steps=64):
-    """
-    Calculates Phonovibrogram based on labels.
+    """Calculates Phonovibrogram based on labels.
 
-    :param s: ndarray, segmented area (TxYxX)
-    :param labels: ndarray, labelled image
-    :param steps: int, steps
-    :return: ndarray, time x 2*steps
+    :param s: segmented area (TxYxX)
+    :type s: numpy.ndarray
+    :param labels: labelled image
+    :type labels: numpy.ndarray
+    :param steps: PVG resolution, defaults to 64
+    :type steps: int, optional
+    :return: PVG, time x 2*steps
+    :rtype: numpy.ndarray
     """
     pvg = np.zeros((s.shape[0], steps * 2))
     l = np.zeros((steps*2, )+labels.shape[1:], dtype=np.bool_)

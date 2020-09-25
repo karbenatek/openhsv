@@ -22,7 +22,7 @@ else:
 
 def FindLibrary(library_name = "XStreamDrv", library_loader = _library_loader):
     library_path = ctypes.util.find_library(library_name)
-    library_path = r"XStreamDrv.dll"
+
     if library_path:
         return library_loader.LoadLibrary(library_path)
     else:

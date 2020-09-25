@@ -1,6 +1,15 @@
 openhsv\.analysis package
 =========================
 
+Module contents
+---------------
+
+.. automodule:: openhsv.analysis
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
 Submodules
 ----------
 
@@ -20,11 +29,21 @@ openhsv\.analysis\.parameters module
     :undoc-members:
     :show-inheritance:
 
+openhsv\.analysis\.midline module
+------------------------------------
 
-Module contents
----------------
-
-.. automodule:: openhsv.analysis
+.. automodule:: openhsv.analysis.midline
     :members:
     :undoc-members:
     :show-inheritance:
+
+
+openhsv\.analysis\.pvg module
+------------------------------------
+
+.. automodule:: openhsv.analysis.pvg
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+

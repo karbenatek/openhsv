@@ -5,12 +5,12 @@ from PyQt5.QtWidgets import QWidget, QTableWidget, QGridLayout, \
 import pandas as pd
 
 class Table(QWidget):
-    def __init__(self, d, headers=['parameter', 'mean', 'std']):
+    def __init__(self, d, headers=['parameter', 'mean', 'std'], title="Table"):
         super().__init__()
 
         self.d = d
         self.headers = headers
-        self.setWindowTitle("Table")
+        self.setWindowTitle(title)
 
         # Add table
         self.l = QGridLayout(self)

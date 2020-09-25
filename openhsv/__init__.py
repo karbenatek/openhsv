@@ -18,6 +18,7 @@ from os.path import isdir
 import os
 from datetime import datetime
 from scipy.io.wavfile import read
+from pathlib import Path
 
 # Own scripts
 from openhsv.analysis.nn import Analysis
@@ -39,11 +40,13 @@ class OpenHSV (QWidget):
 
     :param app: To init OpenHSV, you only need to pass the QApplication instance
     :type app: QtWidgets.QApplication
+    :param base_folder: Location where data is stored
+    :type base_folder: str, optional
     :param verbose: Prints additional information to the Python console, defaults to False.
     :type verbose: boolean, optional
 
     """
-    def __init__(self, app, verbose=False):
+    def __init__(self, app, base_folder="C:/openhsv", verbose=False):
         super().__init__()
 
         self.cam = None
@@ -65,13 +68,13 @@ class OpenHSV (QWidget):
         self.audioQueue = queue.Queue()
 
         # Not currently used...
-        # self.t = QTimer()
-        # self.t.timeout.connect(self.nextFrame)
+        self.t = QTimer()
+        self.t.timeout.connect(self.nextFrame)
 
         self.abortSaving = False
         self.save_raw = True
 
-        self.base_folder = r"C:/openhsv"
+        self.base_folder = base_folder
 
         # self.exposureTime = exposureTime
         # self.videoSamplingRate = videoSamplingRate
@@ -218,15 +221,17 @@ class OpenHSV (QWidget):
         self.l.addWidget(self.saveButton, 13, 1)
 
         # Play/Stop preview of data, doesn't work well
-        # self.b2 = QPushButton("Play/Stop")
-        # self.b2.clicked.connect(self.playStop)
-        # self.b2.setEnabled(False)
-        # self.l.addWidget(self.b2, 12, 1)
+        self.b2 = QPushButton("Play/Stop")
+        self.b2.clicked.connect(self.playStop)
+        self.b2.setEnabled(False)
+        self.l.addWidget(self.b2, 15, 1)
 
         self.updateRangeIndicator()
         self.initSettings()
 
     def findpatient(self):
+        """Opens a window to select patient from database.
+        """
         self.db = DB(self.base_folder)
         self.db.show()
 
@@ -399,7 +404,7 @@ class OpenHSV (QWidget):
                 self.saveButton.setEnabled(True)
                 self.b.setEnabled(True)
                 self.b1.setEnabled(True)
-                # self.b2.setEnabled(True)
+                self.b2.setEnabled(True)
 
             else:
                 QMessageBox.critical(self,
@@ -411,15 +416,19 @@ class OpenHSV (QWidget):
         else:
             return
 
-    # def playStop(self):
-    #     if self.play:
-    #         self.t.stop()
-    #         self.play = False
+    def playStop(self):
+        if self.play:
+            self.t.stop()
+            self.play = False
+            self.start_slider.setEnabled(True)
+            self.end_slider.setEnabled(True)
 
-    #     else:
-    #         # 30 fps --> 34 ms per frame
-    #         self.t.start(34)
-    #         self.play = True
+        else:
+            self.start_slider.setEnabled(False)
+            self.end_slider.setEnabled(False)
+            # 30 fps --> 34 ms per frame
+            self.t.start(34)
+            self.play = True
 
     def setImage(self, im, restore_view=True, restore_levels=False):
         """Shows image in the camera preview window. It further can restore the previous
@@ -449,14 +458,14 @@ class OpenHSV (QWidget):
         if restore_levels:
             self.im.getImageItem().setLevels(levels)
 
-    # def nextFrame(self):
-    #     self.cur_frame += 1
+    def nextFrame(self):
+        self.cur_frame += 1
 
-    #     if self.cur_frame >= self.cam.frames_to_record:
-    #         self.cur_frame = 0
+        if self.cur_frame >= self.end_slider.value():
+            self.cur_frame = self.start_slider.value()
 
-    #     im = self.cam.getMemoryFrame(self.cur_frame, by_trigger=True)
-    #     self.setImage(im.transpose((1, 0, 2)))
+        im = self.cam.getMemoryFrame(self.cur_frame, by_trigger=True)
+        self.setImage(im.transpose((1, 0, 2)))
 
     def initAudio(self):
         """initialize audio recorder and empties the audio queue and data list. 
@@ -601,6 +610,9 @@ class OpenHSV (QWidget):
 
                 # Update trigger position on camera
                 self.cam.updateTriggerPosition()
+                self.cam.stopGrab()
+                self.grabbing = False
+                self.b.setText("Start Camera Feed")
                 break
 
             else:
@@ -708,6 +720,7 @@ class OpenHSV (QWidget):
 
         self.progess.setEnabled(True)
         
+        # Open Analysis window and raise to front
         self.a = Analysis()
         self.a.show()
         self.a.raise_()
@@ -746,8 +759,20 @@ class OpenHSV (QWidget):
         if self.verbose:
             print("Total ims: ", len(ims))
 
+        # Audio
+        try:
+            audio = np.vstack(self.audioData)
+            self.a.setAudio(audio)
+            self.a.syncAudio(start, end, self.cam.frames_to_record)
+            
+        except Exception as e:
+            QMessageBox.critical(self,
+                "Audio synching failed.",
+                repr(e))
+
         # Show parameters
-        params = self.a.computeParameters()
+        params = self.a.computeParameters(dt_audio=1/self.audioSamplingRate,
+            dt_video=1/self.videoSamplingRate)
 
         # Save metadata
         self.analysis = self.a.get()
@@ -855,7 +880,7 @@ class OpenHSV (QWidget):
 
         # Create folder if it does not exist
         if not os.path.exists(folder_name):
-            os.mkdir(folder_name)
+            os.makedirs(folder_name)
 
         # Create filename base
         now = datetime.now()
@@ -961,16 +986,23 @@ class OpenHSV (QWidget):
             if len(audio) >= self.audioSamplingRate*save_last_seconds:
                 audio = audio[-self.audioSamplingRate*save_last_seconds:]
 
+            # Save WAV
+            try:
+                # Save audio also as wav file - for the time being
+                wavwrite(fn_base +".wav", self.audioSamplingRate, audio)
+                saved.append("Audio [wav]")
+
+            except Exception as e:
+                sys.stderr.write("Audio could not be saved as wav. \n{}".format(e))
+
+            # Save HDF5
             try:
                 # Save audio as compressed hdf5 file
                 fl.save(fn_base+".audio", dict(audio=audio), compression=("blosc", 5))
                 saved.append("Audio [hdf5]")
 
-                # Save audio also as wav file - for the time being
-                wavwrite(fn_base +".wav", self.audioSamplingRate, audio)
-                saved.append("Audio [wav]")
             except Exception as e:
-                sys.stderr.write("Audio could not be saved.\n{}".format(e))
+                sys.stderr.write("Audio could not be saved as hdf5.\n{}".format(e))
 
         # Show progress at 97% for saving the audio data
         self.progess.setValue(97)

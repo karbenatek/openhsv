@@ -6,20 +6,27 @@
 Welcome to OpenHSV's documentation!
 ===================================
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+OpenHSV is an open platform for laryngeal high-speed videoendoscopy. This documentation will help you 
+to setup OpenHSV and to do data analysis.
+
+.. image:: ../images/openhsv_screenshot.png
+    :align: center
+    :alt: OpenHSV screenshot
+
+.. note::
+   OpenHSV is only a **research** tool and is **not FDA approved**. You may consult your local ethics committee
+   before using OpenHSV in your environment/clinic. 
 
 .. toctree::
     :maxdepth: 2
-    :caption: Modules
+    :caption: User Guide
+    :glob:
+
+    userguide/*
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Developer Guide
     :glob:
 
     modules/*
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`

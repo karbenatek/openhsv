@@ -16,10 +16,11 @@ if __name__ == '__main__':
     time.sleep(2)
     splash.close()
 
+    base_folder = r"C:/openhsv"
+
     # Show OpenHSV main window
-    w = OpenHSV(app)
+    w = OpenHSV(app, base_folder=base_folder)
     w.showMaximized()
     w.updateRangeIndicator()
 
     sys.exit(app.exec_())
-    

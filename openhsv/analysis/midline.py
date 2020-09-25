@@ -3,7 +3,7 @@ from scipy.signal import find_peaks
 import cv2
 from skimage.measure import moments
 from sklearn.decomposition import PCA
-from openhsv.analysis.pvg import compute_pvg, get_labels, create_maps
+from openhsv.analysis.pvg import compute_pvg, get_labels, _create_maps
 
 class Midline:
     def __init__(self, seg, maxima=None):
@@ -79,7 +79,7 @@ class Midline:
             coef, intercept = self.line_properties[frame]
 
             # Create Left/Right map for frame
-            LR = create_maps(self.seg.shape[1:], coef, np.array([intercept]))[0]
+            LR = _create_maps(self.seg.shape[1:], coef, np.array([intercept]))[0]
 
             # Compute segmented pixels for left and right side, respectively
             self.side_gaws[frame, 0] = ((LR >= 0) & self.seg[frame]).sum()

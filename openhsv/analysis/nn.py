@@ -5,8 +5,9 @@ from skimage.color import rgb2gray
 import numpy as np
 from tqdm import tqdm
 from openhsv.analysis.midline import Midline
-from openhsv.analysis.parameters import GAW
+from openhsv.analysis.parameters import GAW, Audio
 from openhsv.gui.table import Table
+from openhsv.analysis.audio import sync
 
 def _divpad(im, multiple_of=32, cval=0):
     """preprocesses an cropped image for feeding into neural network.
@@ -57,11 +58,13 @@ class Analysis(QWidget):
         self.model = None
         self.segmentations = []
         self.GAW = []
+        self.audio = None
+        self.synced_audio = None
 
-        self.initUI()
-        self.initTensorflow()
+        self._initUI()
+        self._initTensorflow()
 
-    def initUI(self):
+    def _initUI(self):
         """inits the user interface. In particular, it prepares the preview window for
         the endoscopic image, the segmentation map and the glottal area waveform (GAW).
         """
@@ -91,7 +94,7 @@ class Analysis(QWidget):
         self.l.addWidget(self.seg, 1, 2, 1, 1)
         self.l.addWidget(self.plt, 1, 4, 1, 1)
 
-    def initTensorflow(self):
+    def _initTensorflow(self):
         """Initializes tensorflow and loads glottis segmentation neural network
         """
         from tensorflow.keras.models import load_model
@@ -153,11 +156,32 @@ class Analysis(QWidget):
         self.seg.setImage(pr.transpose((1, 0)))
         self.curve.setData(self.GAW[-40:])
 
-    def computeParameters(self, dt=1/4000, debug=False):
+    def setAudio(self, audio):
+        self.audio = audio
+
+    def syncAudio(self, start_frame, end_frame, total_frames, debug=False):
+        if self.audio is None:
+            return
+        
+        reference_signal = self.audio[..., 0]
+        audio_signal = self.audio[..., 1]
+
+        synced_audio = sync(reference_signal=reference_signal,
+            audio_signal=audio_signal,
+            start_frame=start_frame,
+            end_frame=end_frame,
+            total_frames=total_frames,
+            debug=debug)
+
+        self.synced_audio = synced_audio
+
+    def computeParameters(self, dt_audio=1/80000, dt_video=1/4000, debug=False):
         """Compute parameters from GAW
 
-        :param dt: sampling time in seconds, defaults to 1/4000
-        :type dt: float, optional
+        :param dt_audio: audio sampling time in seconds, defaults to 1/80000
+        :type dt_audio: float, optional
+        :param dt_video: video sampling time in seconds, defaults to 1/4000
+        :type dt_video: float, optional
         :param debug: shows debugging information and plots, defaults to False
         :type debug: bool, optional
         """
@@ -177,13 +201,13 @@ class Analysis(QWidget):
         gaw = GAW(seg.sum((1,2)), 
             use_filtered_signal=False, 
             use_hanning=False, 
-            dt=dt)
+            dt=dt_video)
 
         gaw.setLeftRightGAW(left_gaw, right_gaw)
-        params = gaw.computeParameters()
+        params_GAW = gaw.computeParameters()
 
         # Create summary table for parameters
-        self.t = Table(params)
+        self.t = Table(params_GAW, title="GAW parameters")
         self.t.show()
 
         if debug:
@@ -220,7 +244,23 @@ class Analysis(QWidget):
         pvg = M.pvg()
         pg.image(pvg, title="Phonovibrogram")
 
-        return params
+        # If audio data is available
+        if type(self.synced_audio) != None:
+            if debug:
+                pg.plot(self.synced_audio, 
+                    title="Synchronized audio")
+
+            a = Audio(self.synced_audio,
+                dt=dt_audio)
+
+            params_Audio = a.computeParameters()
+
+            t = Table(params_Audio, title="Audio parameters")
+            t.show()   
+        else:
+            params_Audio = None 
+
+        return dict(GAW=params_GAW, Audio=params_Audio)
 
     def get(self):
         """returns GAW and segmentation maps for video
@@ -233,17 +273,30 @@ class Analysis(QWidget):
 if __name__ == '__main__':
     from PyQt5.QtWidgets import QApplication
     import imageio as io
+    from scipy.io.wavfile import read
+    import matplotlib.pyplot as plt 
 
     app = QApplication([])
+
+    DEBUG = True
     
     # Load an example video
     vid = io.mimread(r"./openhsv/examples/oscillating_vocal_folds.mp4",
         memtest=False)
+    freq, audio = read("./openhsv/examples/audio.wav")
 
     # Create analysis class and show widget
     a = Analysis(app)
     a.show()
+    # Segment glottis
     a.segmentSequence(vid)
-    a.computeParameters(dt=1/1000, debug=True)
+    # Set audio and sync it
+    a.setAudio(audio)
+    a.syncAudio(1234, 2345, 4000, debug=DEBUG)
+
+    # Compute parameters from video and audio
+    a.computeParameters(dt_video=1/1000, 
+        dt_audio=1/freq,
+        debug=DEBUG)
 
     app.exec_()

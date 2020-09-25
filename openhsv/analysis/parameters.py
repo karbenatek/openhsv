@@ -16,6 +16,15 @@ import matplotlib.pyplot as plt
 
 @njit
 def movingAverage(x, n=3):
+    """computes moving average from x with a window of n
+
+    :param x: input array
+    :type x: numpy.ndarray
+    :param n: window, defaults to 3
+    :type n: int, optional
+    :return: filtered array
+    :rtype: numpy.ndarray
+    """
     y = np.zeros_like(x, dtype=np.float32)
 
     for i in range(x.shape[0]):
@@ -203,12 +212,44 @@ def F0fromCycles(T, verbose=False, epsilon=1e-9):
     return f0, f0_std
 
 def F0fromFFT(fft, freqs, freq_lower=75, freq_higher=500):
+    """fundamental frequency from power spectrum determined
+    assuming that fundamental frequency is equal to the dominant frequency.
+    Frequency is determined in physiological range (75-500 Hz).
+
+    :param fft: fast fourier transformation of signal
+    :type fft: numpy.ndarray
+    :param freqs: frequencies corresponding to FFT
+    :type freqs: numpy.ndarray
+    :param freq_lower: lower border for F0 prediction, defaults to 75
+    :type freq_lower: int, optional
+    :param freq_higher: higher border for F0 prediction, defaults to 500
+    :type freq_higher: int, optional
+    :return: fundamental frequency (F0)
+    :rtype: float
+    """
     f0 = np.argmax(abs(fft[(freqs > freq_lower) & (freqs < freq_higher)]))
     f0 = freqs[f0+len(freqs[freqs <= freq_lower])]
 
     return f0
 
 def F0fromAutocorrelation(signal, freq=40000):
+    """Fundamental frequency using autocorrelation.
+
+    Steps:
+        1) rFFT of signal
+        2) Corresponding frequencies
+        3) Autocorrelation
+        4) Find peaks in autocorrelation
+        5) Remove first unrelevant peaks
+        6) Use first peak as fundamental frequency
+
+    :param signal: Signal (e.g. audio trace or GAW)
+    :type signal: numpy.ndarray
+    :param freq: sampling frequency, defaults to 40000 Hz
+    :type freq: int
+    :return: fundamental frequency (F0)
+    :rtype: float
+    """
     # rFFT from Signal
     fft = np.fft.rfft(signal)
 
@@ -389,28 +430,29 @@ def periodPerturbationFactor(T):
     .. math::
         \text{PPF} = \frac{1}{N-1} \sum_{i=1}^{N-1}|\frac{T_i-T_{i-1}}{T_i}| \cdot 100
     
-    :param T: [description]
-    :type T: [type]
+    :param T: periods
+    :type T: list
     :return: PPF in percent
     :rtype: float
     """
-    return np.mean(np.abs(np.diff(T)/T[1:])) * 100
+    PPT = np.abs(np.diff(T)/T[1:])
+    return np.mean(PPT) * 100, np.std(PPT) * 100
 
 def glottalGapIndex(signal, opening, epsilon=1e-9):
-    """Glottal Gap Index (GGI) that computes the relation between
+    r"""Glottal Gap Index (GGI) that computes the relation between 
     minimum and maximum glottal area in each glottal cycle.
 
     .. math::
         GGI = \frac{1}{N} \sum_i^N \frac{\min(a_i)}{\max(a_i)}
 
-    :param signal: [description]
-    :type signal: [type]
-    :param opening: [description]
-    :type opening: [type]
-    :param epsilon: [description], defaults to 1e-9
-    :type epsilon: [type], optional
-    :return: [description]
-    :rtype: [type]
+    :param signal: glottal area waveform
+    :type signal: numpy.ndarray
+    :param opening: points where the glottis opens
+    :type opening: list
+    :param epsilon: numerical stability, defaults to 1e-9
+    :type epsilon: float, optional
+    :return: glottal gap index mean and std
+    :rtype: tuple(float, float)
     """
     ggi = []
     
@@ -422,6 +464,16 @@ def glottalGapIndex(signal, opening, epsilon=1e-9):
     return np.mean(ggi), np.std(ggi)
 
 def amplitudePerturbationFactor(A):
+    r"""Amplitude perturbation factor.
+
+    .. math::
+        APF = \frac{1}{N} \sum_{i=1}^{N-1}|\frac{A_i-A_{i-1}}{A_i}| \cdot 100
+
+    :param A: amplitudes in each cycle
+    :type A: list or numpy.ndarray
+    :return: APF mean and std
+    :rtype: tuple(float, float)
+    """
     APF = []
     
     for i in range(1, len(A)):
@@ -430,6 +482,20 @@ def amplitudePerturbationFactor(A):
     return np.mean(APF) * 100, np.std(APF) * 100
 
 def amplitudePerturbationQuotient(A, k=3):
+    r"""Amplitude perturbation quotient
+
+    .. math::
+        l = \frac{k-1}{2}
+    .. math::
+        APQ_k = \frac{1}{N-k} \sum_{i=l}^{N-l-1}|1-\frac{k \cdot A_i}{\sum_{j=-l}^{l}A_{i+j}}| \cdot 100
+
+    :param A: amplitudes in each cycle
+    :type A: list or numpy.ndarray
+    :param k: range, defaults to 3
+    :type k: int, optional
+    :return: APQ mean and std
+    :rtype: tuple(float, float)
+    """
     APQ = []
     lim = int((k-1)/2)
 
@@ -442,6 +508,18 @@ def amplitudePerturbationQuotient(A, k=3):
     return np.mean(APQ) * 100, np.std(APQ) * 100
 
 def amplitudeQuotient(signal, opening):
+    r"""Amplitude Quotient
+
+    .. math::
+        AQ = \frac{A_i}{|\min_j \frac{d}{dj}f_i(j)|}
+
+    :param signal: audio or GAW signal
+    :type signal: numpy.ndarray
+    :param opening: indices where glottis starts to open
+    :type opening: list
+    :return: AQ mean and std
+    :rtype: tuple(float, float)
+    """
     AQ = []
 
     dSignal = np.insert(np.diff(signal), 0, 0)
@@ -457,6 +535,18 @@ def amplitudeQuotient(signal, opening):
 
 
 def stiffness(signal, opening):
+    r"""Stiffness
+
+    .. math::
+        Stiffness = \frac{|\max_j |\frac{d}{dj}f_i(j)||}{A_i}
+
+    :param signal: audio or GAW signal
+    :type signal: numpy.ndarray
+    :param opening: indices where glottis starts to open
+    :type opening: list
+    :return: stiffness mean and std
+    :rtype: tuple(float, float)
+    """
     S = []
 
     dSignal = np.insert(np.diff(signal), 0, 0)
@@ -471,7 +561,7 @@ def stiffness(signal, opening):
 
 
 def harmonicNoiseRatio(signal, freq, freq_lower=50, freq_higher=450, filter_autocorrelation=False, epsilon=1e-9):
-    """Computes Harmonic-Noise-Ratio  (HNR) using autocorrelation approximation.
+    r"""Computes Harmonic-Noise-Ratio  (HNR) using autocorrelation approximation.
     First, it computes the fundamental frequency using the power spectrum of ``signal``.
     Next, it computes the autocorrelation in Fourier space. 
     Then, local maxima in the autocorrelation are found, the HNR computed and the maximum HNR
@@ -480,6 +570,7 @@ def harmonicNoiseRatio(signal, freq, freq_lower=50, freq_higher=450, filter_auto
     .. math::
         R_{xx} = \frac{1}{N} \sum_{k=l}^{N-1} x[k]x[k-l]
 
+    .. math::
         HNR = \frac{R_{xx}[T_0]}{R_{xx}[0]-R_{xx}[T_0]}
 
     :param signal: audio signal
@@ -527,7 +618,7 @@ def harmonicNoiseRatio(signal, freq, freq_lower=50, freq_higher=450, filter_auto
     return np.max(hnr), 1/time[p[np.argmax(hnr)]]
 
 def cepstralPeakProminence(signal, freq, freq_lower=70, freq_higher=350, plot=False):
-    """Computes cepstral peak prominence from signal using Fourier transformations.
+    r"""Computes cepstral peak prominence from signal using Fourier transformations.
 
     Steps:
         1) Compute FFT from signal
@@ -580,8 +671,6 @@ def cepstralPeakProminence(signal, freq, freq_lower=70, freq_higher=350, plot=Fa
     m, b = curve_fit(_lin, quefrencies, cepstrum)[0]
     
     # Find cepstrum peak around f0:
-    # qx = np.where((quefrencies > 1/(f0+20)) & (quefrencies < 1/(f0-20)))[0]
-    # p = np.argmax(cepstrum[qx[0]:qx[-1]])+qx[0]
     p = np.argmax(cepstrum)
 
     # Find fundamental frequency from cepstrum
@@ -593,14 +682,33 @@ def cepstralPeakProminence(signal, freq, freq_lower=70, freq_higher=350, plot=Fa
     
     if plot:
         plt.figure()
-        plt.plot(quefrencies, cepstrum)
-        plt.plot(quefrencies, _lin(quefrencies, m, b), c='k')
-        plt.plot([quefrency, quefrency], [_lin(time[p],m,b), cepstrum[p]])
-        plt.xlim([quefrency-.002, quefrency+.002])
+        plt.plot(quefrencies, cepstrum, label="cepstrum")
+        plt.plot(quefrencies, _lin(quefrencies, m, b), c='k', label="est. baseline")
+        plt.plot([quefrency, quefrency], 
+            [_lin(time[p],m,b), cepstrum[p]],
+            label="CPP")
+
+        plt.legend(loc='best')
+        # plt.xlim([quefrency-.002, quefrency+.002])
+        plt.title("Cepstral Peak Prominence")
     
     return -10 * np.log10(cpp+epsilon), f0, f0_q
 
 def phaseAsymmetryIndex(left_gaw, right_gaw, opening):
+    r"""Phase Asymmetry Index (PAI)
+
+    .. math::
+        PAI = \frac{|argmin_j GA_i^L(j) - argmin_j GA_i^R(j)|}{N_i}
+
+    :param left_gaw: GAW of left vocal fold
+    :type left_gaw: numpy.ndarray
+    :param right_gaw: GAW from right vocal fold
+    :type right_gaw: numpy.ndarray
+    :param opening: indices where glottis starts to open (i.e. new cycle)
+    :type opening: list
+    :return: PAI mean and std
+    :rtype: tuple(float, float)
+    """
     PAI = []
 
     for i0, i1 in zip(opening, opening[1:]):
@@ -614,6 +722,22 @@ def phaseAsymmetryIndex(left_gaw, right_gaw, opening):
     return np.mean(PAI), np.std(PAI)
 
 def amplitudeSymmetryIndex(left_gaw, right_gaw, opening, epsilon=1e-5):
+    r"""Amplitude Symmetry Index (ASI)
+
+    .. math:: 
+        ASI = \frac{\min(\max_j(GA_i^L(j)), \max_j(GA_i^R(j)))}{\max(\max_j(GA_i^L(j)), \max_j(GA_i^R(j)))}
+
+    :param left_gaw: GAW of left vocal fold
+    :type left_gaw: numpy.ndarray
+    :param right_gaw: GAW from right vocal fold
+    :type right_gaw: numpy.ndarray
+    :param opening: indices where glottis starts to open (i.e. new cycle)
+    :type opening: list
+    :param epsilon: numerical stability, defaults to 1e-5
+    :type epsilon: float, optional
+    :return: ASI mean and std
+    :rtype: tuple(float, float)
+    """
     ASI = []
 
     for i0, i1 in zip(opening, opening[1:]):
@@ -628,7 +752,7 @@ def amplitudeSymmetryIndex(left_gaw, right_gaw, opening, epsilon=1e-5):
 
 
 class Signal:
-    def __init__(self, raw_signal, dt=1/4000, verbose=True):
+    def __init__(self, raw_signal, dt=1/4000, debug=True):
         r"""Inits the signal class with the raw signal, e.g. audio data or glottal area waveform.
         
         :param raw_signal: Audio signal, GAW or alike
@@ -641,7 +765,7 @@ class Signal:
         # First sample is acquired after dt,
         # in total N dt-spaced samples
         self.t = np.linspace(dt, dt*len(raw_signal), len(raw_signal))
-        self.verbose = verbose
+        self.debug = debug
 
         # Filtered signal to remove noise
         self.filtered_signal = raw_signal
@@ -748,31 +872,32 @@ class Signal:
         return self.t[:len(self.cepstrum)], self.cepstrum
 
 class Audio(Signal):
-    def __init__(self, raw_signal, dt=1/80000, use_filtered_signal=True, use_hanning=True, verbose=False):
-        super().__init__(raw_signal=raw_signal, dt=dt, verbose=verbose)
+    def __init__(self, raw_signal, dt=1/80000, use_filtered_signal=True, use_hanning=True, debug=False):
+        super().__init__(raw_signal=raw_signal, dt=dt, debug=debug)
         self.median_signal = None
         self.F0 = None
 
         self.computeFFT(use_filtered_signal=False, use_hanning=use_hanning)
         self.computeCepstrum()
         self.filterSignal()
-        self.detectCycles2(use_filtered_signal=use_filtered_signal, peak='max')
+        self.detectCycles(use_filtered_signal=use_filtered_signal, peak='max')
 
-    # @njit
     def _A(self, real_zp, use_median_filtered_signal=True):
         A = np.zeros(real_zp.shape[0]-1, dtype=np.float32)
         x = 0
         s = self.median_signal if use_median_filtered_signal else self.raw_signal
         
+        # Iterate over cycles identified by Zero-crossing of fundamental frequency
         for i, j in zip(real_zp, real_zp[1:]):
             if i < 0:
                 i = 0
+            # Compute amplitude (min signal to max signal)
             A[x] = abs(np.max(s[i:j+1])-np.min(s[i:j+1]))
             x += 1
             
         return A
 
-    def detectCycles2(self, method='peaks', peak='max', use_filtered_signal=True):
+    def detectCycles(self, method='peaks', peak='max', use_filtered_signal=True):
         """Detects cycles using different methods.
          
         :param method: 
@@ -791,19 +916,6 @@ class Audio(Signal):
 
         signal = self.filtered_signal if use_filtered_signal else self.raw_signal
         peak = 0 if peak == 'max' else 1
-
-        # if method == 'peaks':
-        #     self.raw_peaks = detectMaximaMinima(signal)
-
-        # self.clean_peaks = self.raw_peaks[peak].copy()
-
-        # # print(self.clean_peaks)
-
-        # for i, p in enumerate(self.raw_peaks[peak]):
-        #     self.clean_peaks[i] = np.argmax(self.raw_signal[p-30:p+30])+p
-            
-        # self.Tp = np.diff(self.t[self.clean_peaks])
-        # self.A = self.raw_signal[self.clean_peaks]
 
         # Identify zero-crossings on (filtered!) signal
         zc = np.diff(np.sign(signal-.5), prepend=np.sign(signal[0]))
@@ -872,14 +984,14 @@ class Audio(Signal):
 
         HNR = harmonicNoiseRatio(s, 1/self.dt)
 
-        if self.verbose:
+        if self.debug:
             print(HNR)
 
         params['HNR'] = HNR[0]
 
-        CPP = cepstralPeakProminence(s, 1/self.dt, plot=True)
+        CPP = cepstralPeakProminence(s, 1/self.dt, plot=self.debug)
 
-        if self.verbose:
+        if self.debug:
             print(CPP)
 
         params['CPP'] = CPP[0]
@@ -888,18 +1000,18 @@ class Audio(Signal):
         params['F0_Spectrum'] = F0fromFFT(self.fft, self.fftfreq)
         params['F0_Autocorr'] = HNR[1] # F0 from autocorrelation, maybe direct function?
         params['F0_Cepstrum'] = CPP[2] # F0 from quefrency peak
-        params['APF'] = amplitudePerturbationFactor(A)
-        params['APQ3'] = amplitudePerturbationQuotient(A, k=3)
-        params['APQ5'] = amplitudePerturbationQuotient(A, k=5)
-        params['APQ11'] = amplitudePerturbationQuotient(A, k=11)
-
+        params['APF'] = amplitudePerturbationFactor(self.A)
+        params['APQ3'] = amplitudePerturbationQuotient(self.A, k=3)
+        params['APQ5'] = amplitudePerturbationQuotient(self.A, k=5)
+        params['APQ11'] = amplitudePerturbationQuotient(self.A, k=11)
 
         return params
 
 
 class GAW(Signal):
-    def __init__(self, raw_signal, dt=1/4000, cutoff_frequency=.1, use_filtered_signal=True, use_hanning=True, verbose=False):
-        super().__init__(raw_signal=raw_signal, dt=dt, verbose=verbose)
+    def __init__(self, raw_signal, dt=1/4000, cutoff_frequency=.1, use_filtered_signal=True, \
+            use_hanning=True, debug=False):
+        super().__init__(raw_signal=raw_signal, dt=dt, debug=debug)
         if use_filtered_signal:
             self.filterSignal(cutoff_frequency=cutoff_frequency)
 
@@ -1014,9 +1126,8 @@ class AnalysisPlatform(QWidget):
         #######################
         print(F0fromCycles(self.signal.T))
         print(jitterPercent(self.signal.T))
-        print(shimmerPercent(self.signal.A))
-
-        
+        print(shimmerPercent(self.signal.A))  
+        print(cepstralPeakProminence(self.signal.raw_signal, 1/self.signal.dt))      
 
         self.setWindowTitle("Analysis Platform")
 

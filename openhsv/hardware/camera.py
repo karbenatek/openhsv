@@ -1,4 +1,4 @@
-from . import XsCamera
+from openhsv.hardware import XsCamera
 import numpy as np
 import sys
 import ctypes
@@ -218,7 +218,7 @@ class IdtCamera(Camera):
 
         # Set Pixel and camera gain        
         XsCamera.XsSetParameter(self.cam, cfg, XsCamera.XS_PARAM.XSP_PIX_GAIN, 1)  # Set to upper 8 bits, default: 0
-        XsCamera.XsSetParameter(self.cam, cfg, XsCamera.XS_PARAM.XSP_GAIN, 1)  # Set to gain = 1, default: 0
+        XsCamera.XsSetParameter(self.cam, cfg, XsCamera.XS_PARAM.XSP_GAIN, 2)  # Set to gain = 1, default: 0
         
         # Check colormode of camera
         is_color = XsCamera.XsGetCameraInfo(self.cam, XsCamera.XS_INFO.XSI_SNS_TYPE)[0]
@@ -388,6 +388,8 @@ class IdtCamera(Camera):
         im = im.reshape(self.height,
                 self.width,
                 3 if self.is_color else 1)[..., ::-1]  # BGR to RGB
+
+        return im
 
     def live(self):
         """Returns live image using XsMemoryPreview

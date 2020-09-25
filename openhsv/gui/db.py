@@ -1,7 +1,8 @@
 from PyQt5.QtWidgets import QMainWindow, QWidget, QPushButton, \
     QGridLayout, QLineEdit, QTableWidget, QDateEdit, QTableWidgetItem, \
-    QHeaderView
+    QHeaderView, QTreeView 
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QStandardItem, QStandardItemModel
 import pyqtgraph as pg 
 from glob import glob
 import imageio as io
@@ -11,10 +12,16 @@ import json
 
 class Table(QWidget):
     def __init__(self, folder):
+        """Table widget for showing patient data.
+
+        :param folder: folder that contains patient data
+        :type folder: str
+        """
         super().__init__()
         self.l = QGridLayout(self)
         self.setMinimumWidth(700)
 
+        # Search options
         self.surname = QLineEdit()
         self.surname.setPlaceholderText("Last name, e.g. Smith")
         self.surname.textChanged.connect(self.search)
@@ -33,11 +40,12 @@ class Table(QWidget):
         self.folder = folder
         self.im = None
 
+        # Create empty table
         self.t = QTableWidget()
         h = self.t.horizontalHeader()
         h.setSectionResizeMode(QHeaderView.Stretch)
         
-
+        # Look for patient data in given folder
         self.fns = glob(folder+"\\**\\*.meta", recursive=True)
         self.patients = []
         self.opened = ""
@@ -71,6 +79,9 @@ class Table(QWidget):
         self.l.addWidget(self.t, 1, 0, 4, 10)
 
     def search(self):
+        """Search for entries in database
+        """
+        # Get search terms
         surname = self.surname.text()
         firstname = self.firstname.text()
         birthdate = self.birthdate.text()
@@ -93,15 +104,12 @@ class Table(QWidget):
                 if birthdate != self.t.item(i, 3).text():
                     self.t.hideRow(i)
 
-            # if surname not in self.t.item(i, 0).text() or \
-            #     firstname not in self.t.item(i, 1).text() or \
-            #     birthdate != self.t.item(i, 3).text():
-            #     self.t.hideRow(i)
-
-            # if not firstname and not surname and birthdate == QDateEdit().text():
-            #     self.t.showRow(i)
-
     def do(self, e):
+        """open selected patient
+
+        :param e: event information
+        :type e: QModelIndex
+        """
         # Get clicked row
         row = e.row()
 
@@ -122,21 +130,62 @@ class Table(QWidget):
         self.im = pg.image(np.asarray(vid, np.uint8).transpose(0,2,1,3),
             title=vid_fn)
 
+        meta = json.load(open(fn))
+        self.d = DictViewer(meta)
+        self.d.show()
+
         self.opened = vid_fn
 
-        
 
+class DictViewer(QTreeView):
+    def __init__(self, dictionary):
+        """Shows a dictionary as a tree view in a separate window.
 
+        :param dictionary: the JSON-like dictionary that should be shown
+        :type dictionary: dict
+        """
+        super().__init__()
+        self.d = dictionary
 
+        # Use a default tree structure with two columns
+        model = QStandardItemModel()
+        self.setModel(model)
+        model.setColumnCount(2)
+        model.setHorizontalHeaderLabels(["key", "value"])
 
+        # For each main node
+        for k, v in self.d.items():
+            parent = QStandardItem(k)
+
+            # If sub-nodes are available
+            if type(v) is dict:                
+                for k1, v1 in v.items():
+                    parent1 = QStandardItem(k1)
+                    c1 = QStandardItem(str(v1))
+
+                    parent.appendRow([parent1, c1])
+
+            else:
+                cs = [QStandardItem(v)]
+                parent.appendRow(cs)    
+
+            model.appendRow(parent)
 
 
 class DB(QMainWindow):
     def __init__(self, folder):
+        """Main database window
+
+        :param folder: folder with patient data 
+        :type folder: str
+        """
         super().__init__()
         self.l = QGridLayout(self)
         self.t = Table(folder)
         self.folder = folder
+
+        self.s = self.statusBar()
+        self.s.showMessage(f"Data location: {self.folder}")
 
         self.setCentralWidget(
             self.t
