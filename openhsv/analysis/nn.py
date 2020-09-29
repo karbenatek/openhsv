@@ -245,7 +245,7 @@ class Analysis(QWidget):
         pg.image(pvg, title="Phonovibrogram")
 
         # If audio data is available
-        if type(self.synced_audio) != None:
+        if type(self.synced_audio) != type(None):
             if debug:
                 pg.plot(self.synced_audio, 
                     title="Synchronized audio")

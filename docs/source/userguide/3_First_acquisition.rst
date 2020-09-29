@@ -3,8 +3,8 @@ Your fist acquisition
 
 Follow these steps:
 
-    #. Connect everything according to hardware_.
-    #. Ensure all software is installed according to software_.
+    #. Connect everything according to :ref:`hardware`.
+    #. Ensure all software is installed according to :ref:`software`.
     #. Turn on computer, illumination, and camera.
     #. Open the OpenHSV software.
     #. Click on "Initialize camera". This opens a connection to the camera using the default settings. 
@@ -12,7 +12,7 @@ Follow these steps:
     #. Click on "Stop Camera Feed" or use the optional foot switch to stop the recording.
     #. Use one of the sliders below to browse through the acquired images.
     #. Select a region of interest using the two range sliders. The bright blue area indicates the selected files.
-    #. You may analyze your data by clicking on "Start Analysis - Glottis Segmentation" after selecting the glottis using the rectangle in the preview window. See also `Data Analysis`_ 
+    #. You may analyze your data by clicking on "Start Analysis - Glottis Segmentation" after selecting the glottis using the rectangle in the preview window. See also :ref:`Data Analysis`. 
     #. Click on "Save data" to save the audio, video and meta data to the local file system. The frames are downloaded from the camera and stored in conventional formats.
 
 Saving data

@@ -6,6 +6,15 @@ import matplotlib.pyplot as plt
 
 @njit
 def _rolling_std_numba(x, window=20):
+    """Rolling standard deviation, faster with numba
+
+    :param x: array
+    :type x: numpy.ndarray
+    :param window: window size for std, defaults to 20
+    :type window: int, optional
+    :return: filtered signal
+    :rtype: numpy.ndarray
+    """
     std = np.zeros_like(x)
     for i in range(window, x.shape[0]):
         std[i-window//2] = np.std(x[i-window:i])
@@ -13,6 +22,20 @@ def _rolling_std_numba(x, window=20):
     return std
 
 def _findTriggerEnd(reference_signal, window=101, prominence=1, zscoring=True):
+    """Uses z-scoring of rolling standard deviation to
+    find the end trigger from the camera to synch audio and video.
+
+    :param reference_signal: reference signal in audio data
+    :type reference_signal: numpy.ndarray
+    :param window: window size, defaults to 101
+    :type window: int, optional
+    :param prominence: prominence for peak finding, defaults to 1
+    :type prominence: int, optional
+    :param zscoring: enables z-scoring of data before peak finding, defaults to True
+    :type zscoring: bool, optional
+    :return: peak location and std signal
+    :rtype: tuple(int, numpy.ndarray)
+    """
     std = _rolling_std_numba(reference_signal, window)
 
     if zscoring:
@@ -30,6 +53,27 @@ def _findTriggerEnd(reference_signal, window=101, prominence=1, zscoring=True):
         return False
 
 def sync(reference_signal, audio_signal, start_frame, end_frame, total_frames, debug=False):
+    """Synchronizes audio signal with video data using the reference signal.
+
+    .. note::
+        This works highly reliable when the reference signal is strong enough.
+        Ensure that the gain of the audio interface is set appropriately.
+
+    :param reference_signal: reference signal from camera
+    :type reference_signal: numpy.ndarray
+    :param audio_signal: recorded audio signal
+    :type audio_signal: numpy.ndarray
+    :param start_frame: start frame of region selection
+    :type start_frame: int
+    :param end_frame: end frame of region selection
+    :type end_frame: int
+    :param total_frames: total amount of recorded frames
+    :type total_frames: int
+    :param debug: sets debug mode with additional information and plots, defaults to False
+    :type debug: bool, optional
+    :return: synchronized signal corresponding to video data
+    :rtype: numpy.ndarray
+    """
     # Find trigger
     trigger_end, std = _findTriggerEnd(reference_signal)
 

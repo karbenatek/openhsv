@@ -10,12 +10,13 @@ class Midline:
         """Midline prediction module.
 
         Midline is predicted based on segmentation from neural net
-        for each peak. Midline is interpolated between peaks.
+        for each peak. Midline is interpolated between peaks. Computations
+        are based on `Kist et al., biorxiv 2020 <https://www.biorxiv.org/content/10.1101/2020.08.20.257428v1.abstract>`_.
 
-        :param seg: [description]
-        :type seg: [type]
-        :param maxima: [description], defaults to None
-        :type maxima: [type], optional
+        :param seg: segmentation masks (T x H x W)
+        :type seg: numpy.ndarray
+        :param maxima: detected maxima in GAW, defaults to None
+        :type maxima: list, optional
         """
         self.seg = seg.astype(np.bool)
         self.gaw = self.seg.sum((1,2))

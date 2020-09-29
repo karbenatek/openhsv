@@ -6,6 +6,15 @@ import pandas as pd
 
 class Table(QWidget):
     def __init__(self, d, headers=['parameter', 'mean', 'std'], title="Table"):
+        """Shows a window with a table
+
+        :param d: Dictionary containing keys (parameters) with corresponding values
+        :type d: dict
+        :param headers: table headers, defaults to ['parameter', 'mean', 'std']
+        :type headers: list, optional
+        :param title: window title, defaults to "Table"
+        :type title: str, optional
+        """
         super().__init__()
 
         self.d = d

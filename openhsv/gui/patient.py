@@ -9,6 +9,11 @@ import json
 
 class Patient(QDialog):
     def __init__(self, base_folder):
+        """Patient dialog
+
+        :param base_folder: base folder where data will be saved
+        :type base_folder: str
+        """
         super().__init__()
         self.setWindowTitle("New patient")
         self.setFixedWidth(300)

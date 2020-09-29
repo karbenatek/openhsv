@@ -172,3 +172,4 @@ texinfo_documents = [
 # -- Options for autodoc -----------------------------------------------------
 autodoc_member_order = "bysource"
 autodoc_inherit_docstrings = True
+autoclass_content = "both"

@@ -525,7 +525,7 @@ def amplitudeQuotient(signal, opening):
     dSignal = np.insert(np.diff(signal), 0, 0)
 
     for i, j in zip(opening, opening[1:]):
-        m = min(dSignal[i:j])
+        m = abs(min(dSignal[i:j]))
         Ai = max(signal[i:j]) - min(signal[i:j])
 
         AQ.append(Ai/m)
@@ -698,7 +698,13 @@ def phaseAsymmetryIndex(left_gaw, right_gaw, opening):
     r"""Phase Asymmetry Index (PAI)
 
     .. math::
-        PAI = \frac{|argmin_j GA_i^L(j) - argmin_j GA_i^R(j)|}{N_i}
+        PAI = \frac{|argmax_j GA_i^L(j) - argmax_j GA_i^R(j)|}{N_i}
+
+    .. note::
+        We use here the maximum instead of the minimum, as it is more
+        likely that there are multiple time points where the value
+        is minimal or close to the minimum (i.e. when the glottis
+        is closed for prolonged time).  
 
     :param left_gaw: GAW of left vocal fold
     :type left_gaw: numpy.ndarray
@@ -716,7 +722,7 @@ def phaseAsymmetryIndex(left_gaw, right_gaw, opening):
         R = right_gaw[i0:i1+1]
 
         PAI.append(
-            abs(np.argmin(L) - np.argmin(R)) / len(L)
+            abs(np.argmax(L) - np.argmax(R)) / len(L)
         )
 
     return np.mean(PAI), np.std(PAI)
@@ -873,14 +879,33 @@ class Signal:
 
 class Audio(Signal):
     def __init__(self, raw_signal, dt=1/80000, use_filtered_signal=True, use_hanning=True, debug=False):
+        """The **Audio** class handles audio data to compute respective parameters.
+
+        :param raw_signal: the raw audio signal
+        :type raw_signal: numpy.ndarray
+        :param dt: time between samples in seconds, defaults to 1/80000
+        :type dt: float, optional
+        :param use_filtered_signal: use filtered signal for computations, defaults to True
+        :type use_filtered_signal: bool, optional
+        :param use_hanning: use hanning window for FFT, defaults to True
+        :type use_hanning: bool, optional
+        :param debug: enable debugging mode, defaults to False
+        :type debug: bool, optional
+        """
+        
         super().__init__(raw_signal=raw_signal, dt=dt, debug=debug)
         self.median_signal = None
         self.F0 = None
 
-        self.computeFFT(use_filtered_signal=False, use_hanning=use_hanning)
+        self.computeFFT(use_filtered_signal=False, 
+            use_hanning=use_hanning)
+
         self.computeCepstrum()
+
         self.filterSignal()
-        self.detectCycles(use_filtered_signal=use_filtered_signal, peak='max')
+
+        self.detectCycles(use_filtered_signal=use_filtered_signal, 
+            peak='max')
 
     def _A(self, real_zp, use_median_filtered_signal=True):
         A = np.zeros(real_zp.shape[0]-1, dtype=np.float32)
@@ -1009,11 +1034,25 @@ class Audio(Signal):
 
 
 class GAW(Signal):
-    def __init__(self, raw_signal, dt=1/4000, cutoff_frequency=.1, use_filtered_signal=True, \
+    def __init__(self, raw_signal, dt=1/4000, use_filtered_signal=False, \
             use_hanning=True, debug=False):
+        """The **GAW** class handles the glottal area waveform (GAW) to compute respective parameters.
+
+        :param raw_signal: raw GAW signal
+        :type raw_signal: numpy.ndarray
+        :param dt: time between samples in seconds, defaults to 1/4000
+        :type dt: float, optional
+        :param use_filtered_signal: use filtered signal for computations, defaults to False
+        :type use_filtered_signal: bool, optional
+        :param use_hanning: use hanning window for FFT, defaults to True
+        :type use_hanning: bool, optional
+        :param debug: enable debugging mode, defaults to False
+        :type debug: bool, optional
+        """
+        
         super().__init__(raw_signal=raw_signal, dt=dt, debug=debug)
         if use_filtered_signal:
-            self.filterSignal(cutoff_frequency=cutoff_frequency)
+            self.filterSignal(cutoff_frequency=.1)
 
         self.detectCycles(use_filtered_signal=use_filtered_signal)
         self.detectPhases(use_filtered_signal=use_filtered_signal)
@@ -1044,15 +1083,16 @@ class GAW(Signal):
         params['Speed Quotient'] = speedQuotient(self.CO, self.OC)
         params['Asymmetry Quotient'] = asymmetryQuotient(self.CO, self.OC)
         params['Rate Quotient'] = rateQuotient(self.CO, self.OC, self.t_closed)
+        params['Amplitude Quotient'] = amplitudeQuotient(self.raw_signal, self.opening)
         params['Speed Index'] = speedIndex(self.CO, self.OC, self.t_open)
         params['Glottal Gap Index'] = glottalGapIndex(self.raw_signal, self.opening)
+        params['Stiffness'] = stiffness(self.raw_signal, self.opening)
 
         # Symmetry measures if left and right GAWs are available
-        if type(self.left_gaw) != None and type(self.right_gaw) != None:
+        if type(self.left_gaw) != type(None) and type(self.right_gaw) != type(None):
             params['Amplitude Symmetry Index'] = amplitudeSymmetryIndex(self.left_gaw, self.right_gaw, self.opening)
             params['Phase Asymmetry Index'] = phaseAsymmetryIndex(self.left_gaw, self.right_gaw, self.opening)
             
-
         return params
 
 
@@ -1110,19 +1150,20 @@ class AnalysisPlatform(QWidget):
 
         self.signal.computeFFT(use_hanning=True, use_filtered_signal=True)
 
+        self.l.addWidget(QLabel("Power Spectrum"))
         self.powerSpectrum = pg.PlotWidget()
         self.l.addWidget(self.powerSpectrum)
         self.powerSpectrum.plot(*self.signal.getPowerSpectrum())
 
         self.signal.computeCepstrum()
 
+        self.l.addWidget(QLabel("Cepstrum"))
         self.Cepstrum = pg.PlotWidget()
-        # self.Cepstrum.getPlotItem().setLogMode(False, True)
         self.l.addWidget(self.Cepstrum)
         self.Cepstrum.plot(*self.signal.getCepsturm())
 
         #######################
-        ### Compute parameters
+        ### Compute some parameters
         #######################
         print(F0fromCycles(self.signal.T))
         print(jitterPercent(self.signal.T))
@@ -1140,6 +1181,7 @@ class AnalysisPlatform(QWidget):
 
 if __name__ == '__main__':
     from PyQt5.QtWidgets import QApplication, QInputDialog, QLabel
+    from openhsv.gui.table import Table
     app = QApplication([])
 
     freq, ok = QInputDialog.getInt(QWidget(), 
@@ -1150,8 +1192,14 @@ if __name__ == '__main__':
         freq = 100
 
     x = np.arange(0, .200, 1/4000)
-    y = np.sin(x * 2 * np.pi * freq - np.pi/2) #+ np.random.randn(len(x)) / 10
+    y = np.sin(x * 2 * np.pi * freq - np.pi/2)
     y[y<0] = 0 # GAW!
+    
+    # Compute some parameters for 
+    gaw = GAW(y, use_filtered_signal=False)
+    params = gaw.computeParameters()
+    t = Table(params)
+    t.show()
 
     AP = AnalysisPlatform(y, # Signal
         np.diff(x).mean()) # dt

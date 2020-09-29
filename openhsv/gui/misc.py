@@ -3,6 +3,8 @@ import pyqtgraph as pg
 
 class fullScreenPreview(QWidget):
     def __init__(self):
+        """Full Screen Preview widget
+        """
         super().__init__()
 
         # Top left
