@@ -21,6 +21,7 @@ When using the IDT camera, you need to install the IDT SDK as well to gain all r
 
 You find all the documentation here: 
 
+https://openhsv.readthedocs.io/en/latest/
 
 
 ## How to cite OpenHSV
