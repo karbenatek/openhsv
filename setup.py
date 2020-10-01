@@ -18,7 +18,7 @@ setup(
         "flammkuchen",
         "pillow",
         "scikit-image",
-        "imageio",
+        "imageio>=2.4",
         "imageio-ffmpeg",
         "sounddevice"
     ],
