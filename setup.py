@@ -20,7 +20,11 @@ setup(
         "scikit-image",
         "imageio>=2.4",
         "imageio-ffmpeg",
-        "sounddevice"
+        "sounddevice",
+        "opencv-python",
+        "pyqt5",
+        "tqdm",
+        "scikit-learn"
     ],
     classifiers=[
         "Development Status :: 4 - Beta",
