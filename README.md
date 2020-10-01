@@ -1,3 +1,5 @@
+[![Documentation Status](https://readthedocs.org/projects/openhsv/badge/?version=latest)](https://openhsv.readthedocs.io/en/latest/?badge=latest)
+
 # OpenHSV
 
 OpenHSV - Endoscopy and Analysis Software
