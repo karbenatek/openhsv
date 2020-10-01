@@ -23,7 +23,9 @@ import sys
 sys.path.insert(0, os.path.abspath("./"))
 sys.path.insert(0, os.path.abspath("../"))
 
-
+# Fake import to avoid actually loading CFFI and the PortAudio library
+import fake__sounddevice
+sys.modules['_sounddevice'] = sys.modules['fake__sounddevice']
 
 # -- General configuration ------------------------------------------------
 
