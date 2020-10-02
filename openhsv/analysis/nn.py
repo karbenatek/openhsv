@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QWidget, QGridLayout, QLabel
+from PyQt5.QtWidgets import QWidget, QGridLayout, QLabel, QDialog, QPushButton
 from skimage.util import pad
 import pyqtgraph as pg
 from skimage.color import rgb2gray
@@ -270,20 +270,86 @@ class Analysis(QWidget):
         """
         return dict(gaw=self.GAW, segmentation=self.segmentations)
 
+
+
+class ROIDialog(QDialog):
+    def __init__(self, ims):
+        super().__init__()
+
+        self.l = QGridLayout(self)
+        self.imv = pg.ImageView()
+        self.imv.setImage(ims.transpose(0, 2, 1, 3))
+        self.l.addWidget(self.imv)
+
+        self.roi = pg.RectROI((0, 0), (10, 10))
+        self.imv.addItem(self.roi)
+
+        self.b = QPushButton("Save ROI and close window")
+        self.b.clicked.connect(self._close_and_save)
+        self.l.addWidget(self.b)
+
+        self.setWindowTitle("Select an ROI around the glottis")
+        self.setMinimumWidth(800)
+        self.setMinimumHeight(800)
+
+        self.save = False
+        self.exec_()
+        
+    def _close_and_save(self):
+        self.save = True
+        self.close()
+
+    def __getitem__(self, i):
+        pos = self.roi.pos()
+        size = self.roi.size()
+
+        arr = int(pos[1]), int(pos[1]+size[1]), int(pos[0]), int(pos[0]+size[0])
+        return arr[i]
+
 if __name__ == '__main__':
-    from PyQt5.QtWidgets import QApplication
+    from PyQt5.QtWidgets import QApplication, QMessageBox, QFileDialog
     import imageio as io
     from scipy.io.wavfile import read
     import matplotlib.pyplot as plt 
-
-    app = QApplication([])
+    from glob import glob
 
     DEBUG = True
-    
-    # Load an example video
-    vid = io.mimread(r"./openhsv/examples/oscillating_vocal_folds.mp4",
-        memtest=False)
-    freq, audio = read("./openhsv/examples/audio.wav")
+    app = QApplication([])
+
+    Q = QMessageBox.question(QWidget(), 
+        "Load example data?",
+        "Would you like to load the example data? If no, you can select your own data.")
+
+    if Q == QMessageBox.Yes:
+        # Load an example video
+        vid = io.mimread(r"./openhsv/examples/oscillating_vocal_folds.mp4",
+            memtest=False)
+        freq, audio = read("./openhsv/examples/audio.wav")
+
+    else:
+        folder = QFileDialog.getExistingDirectory(caption="Select folder with data")
+
+        if folder:
+            try:
+                mp4 = glob(folder+"/*.mp4")[0]
+                wav = glob(folder+"/*.wav")[0]
+
+                vid = io.mimread(mp4, memtest=False)
+                freq, audio = read(wav)
+
+            except Exception as e:
+                QMessageBox.critical(QWidget(), 
+                    "Could not read data.",
+                    f"Exception: \n\n{e}")
+
+        else:
+            sys.exit()
+
+    vid = np.asarray(vid, np.uint8)
+    roi = ROIDialog(vid)
+
+    if roi.save:
+        vid = vid[:, roi[0]:roi[1], roi[2]:roi[3]]
 
     # Create analysis class and show widget
     a = Analysis(app)
