@@ -277,7 +277,7 @@ def F0fromAutocorrelation(signal, freq=40000):
 """
 
 def asymmetryQuotient(CO, OC):
-    """Asymmetry Quotient (AsyQ)
+    r"""Asymmetry Quotient (AsyQ)
 
     .. math::
         \text{AsyQ} = \frac{1}{N} \sum_{i=1}^{N} \frac{\frac{CO_i}{OC_i}}{1+\frac{CO_i}{OC_i}}
@@ -294,7 +294,7 @@ def asymmetryQuotient(CO, OC):
     return aq
 
 def closingQuotient(CO, T):
-    """Closing Quotient (CQ)
+    r"""Closing Quotient (CQ)
 
     .. math::
         \text{CQ} = \frac{1}{N} \sum_{i=1}^{N} \frac{CO_i}{T_i}
@@ -311,7 +311,7 @@ def closingQuotient(CO, T):
     return cq
 
 def openQuotient(t_open, t_closed):
-    """Open Quotient (OQ)
+    r"""Open Quotient (OQ)
 
     .. math::
         \text{OQ} = \frac{1}{N} \sum_{i=1}^{N} \frac{t_{open,i}}{t_{open,i}+t_{closed,i}}
@@ -328,7 +328,7 @@ def openQuotient(t_open, t_closed):
     return oq
 
 def rateQuotient(CO, OC, t_closed):
-    """Rate Quotient (RQ)
+    r"""Rate Quotient (RQ)
 
     .. math::
         \text{RQ} = \frac{1}{N} \sum_{i=1}^{N} \frac{t_{closed,i} - CO_i}{OC_i}
@@ -347,7 +347,7 @@ def rateQuotient(CO, OC, t_closed):
     return np.mean(rq), np.std(rq) 
 
 def speedIndex(CO, OC, t_open):
-    """Speed Index (SI)
+    r"""Speed Index (SI)
 
     .. math::
         \text{SI} = \frac{1}{N} \sum_{i=1}^{N} \frac{CO_i - OC_i}{t_{open,i}}
@@ -366,7 +366,7 @@ def speedIndex(CO, OC, t_open):
     return np.mean(si), np.std(si)
 
 def speedQuotient(CO, OC):
-    """Speed Quotient (SQ)
+    r"""Speed Quotient (SQ)
 
     .. math::
         \text{SQ} = \frac{1}{N} \sum_{i=1}^{N} \frac{CO_i}{OC_i}
