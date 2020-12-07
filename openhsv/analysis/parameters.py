@@ -277,7 +277,10 @@ def F0fromAutocorrelation(signal, freq=40000):
 """
 
 def asymmetryQuotient(CO, OC):
-    """Asymmetry Quotient (AQ)
+    """Asymmetry Quotient (AsyQ)
+
+    .. math::
+        \text{AsyQ} = \frac{1}{N} \sum_{i=1}^{N} \frac{\frac{CO_i}{OC_i}}{1+\frac{CO_i}{OC_i}}
 
     :param CO: Closed->Open transitions
     :type CO: numpy.ndarray
@@ -290,22 +293,28 @@ def asymmetryQuotient(CO, OC):
 
     return aq
 
-def closingQuotient(CO, OC):
+def closingQuotient(CO, T):
     """Closing Quotient (CQ)
+
+    .. math::
+        \text{CQ} = \frac{1}{N} \sum_{i=1}^{N} \frac{CO_i}{T_i}
 
     :param CO: Closed->Open transitions
     :type CO: numpy.ndarray
-    :param OC: Open->Closed transitions
-    :type OC: numpy.ndarray
+    :param T: Cycle duration
+    :type T: numpy.ndarray
     :return: closing quotient (CQ), a.u.
     :rtype: float
     """    
-    cq = np.mean(CO/(CO+OC))
+    cq = np.mean(CO/T)
 
     return cq
 
 def openQuotient(t_open, t_closed):
     """Open Quotient (OQ)
+
+    .. math::
+        \text{OQ} = \frac{1}{N} \sum_{i=1}^{N} \frac{t_{open,i}}{t_{open,i}+t_{closed,i}}
 
     :param t_open: Open intervals
     :type t_open: numpy.ndarray
@@ -320,6 +329,9 @@ def openQuotient(t_open, t_closed):
 
 def rateQuotient(CO, OC, t_closed):
     """Rate Quotient (RQ)
+
+    .. math::
+        \text{RQ} = \frac{1}{N} \sum_{i=1}^{N} \frac{t_{closed,i} - CO_i}{OC_i}
 
     :param CO: Closed->Open transitions
     :type CO: numpy.ndarray
@@ -337,6 +349,9 @@ def rateQuotient(CO, OC, t_closed):
 def speedIndex(CO, OC, t_open):
     """Speed Index (SI)
 
+    .. math::
+        \text{SI} = \frac{1}{N} \sum_{i=1}^{N} \frac{CO_i - OC_i}{t_{open,i}}
+
     :param CO: Closed->Open transitions
     :type CO: numpy.ndarray
     :param OC: Open->Closed transitions
@@ -352,6 +367,9 @@ def speedIndex(CO, OC, t_open):
 
 def speedQuotient(CO, OC):
     """Speed Quotient (SQ)
+
+    .. math::
+        \text{SQ} = \frac{1}{N} \sum_{i=1}^{N} \frac{CO_i}{OC_i}
 
     :param CO: Closed->Open transitions
     :type CO: numpy.ndarray
@@ -1079,7 +1097,7 @@ class GAW(Signal):
         params['F0_Autocorr'] = F0fromAutocorrelation(self.raw_signal)
 
         params['Opening Quotient'] = openQuotient(self.t_open, self.t_closed)
-        params['Closing Quotient'] = closingQuotient(self.CO, self.OC)
+        params['Closing Quotient'] = closingQuotient(self.CO, self.T)
         params['Speed Quotient'] = speedQuotient(self.CO, self.OC)
         params['Asymmetry Quotient'] = asymmetryQuotient(self.CO, self.OC)
         params['Rate Quotient'] = rateQuotient(self.CO, self.OC, self.t_closed)
