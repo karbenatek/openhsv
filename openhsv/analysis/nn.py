@@ -255,8 +255,9 @@ class Analysis(QWidget):
 
             params_Audio = a.computeParameters()
 
-            t = Table(params_Audio, title="Audio parameters")
-            t.show()   
+            
+            self.t2 = Table(params_Audio, title="Audio parameters")
+            self.t2.show()   
         else:
             params_Audio = None 
 
