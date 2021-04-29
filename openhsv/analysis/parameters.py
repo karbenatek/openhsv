@@ -293,20 +293,20 @@ def asymmetryQuotient(CO, OC):
 
     return aq
 
-def closingQuotient(CO, T):
+def closingQuotient(CO, t_open):
     r"""Closing Quotient (CQ)
 
     .. math::
-        \text{CQ} = \frac{1}{N} \sum_{i=1}^{N} \frac{CO_i}{T_i}
+        \text{CQ} = \frac{1}{N} \sum_{i=1}^{N} \frac{CO_i}{t_{open,i}}
 
     :param CO: Closed->Open transitions
     :type CO: numpy.ndarray
-    :param T: Cycle duration
-    :type T: numpy.ndarray
+    :param t_open: Open interval
+    :type t_opent: numpy.ndarray
     :return: closing quotient (CQ), a.u.
     :rtype: float
     """    
-    cq = np.mean(CO/T)
+    cq = np.mean(CO/t_open)
 
     return cq
 
@@ -1097,7 +1097,7 @@ class GAW(Signal):
         params['F0_Autocorr'] = F0fromAutocorrelation(self.raw_signal)
 
         params['Opening Quotient'] = openQuotient(self.t_open, self.t_closed)
-        params['Closing Quotient'] = closingQuotient(self.CO, self.T)
+        params['Closing Quotient'] = closingQuotient(self.CO, self.t_open)
         params['Speed Quotient'] = speedQuotient(self.CO, self.OC)
         params['Asymmetry Quotient'] = asymmetryQuotient(self.CO, self.OC)
         params['Rate Quotient'] = rateQuotient(self.CO, self.OC, self.t_closed)

@@ -107,6 +107,7 @@ class OpenHSV (QWidget):
 
         # Create audio preview window
         self.audio = pg.PlotWidget()
+        self.audio.setMinimumWidth(500)
         self.audioData = []
         # self.audio.setMaximumHeight(350)
         self.audioCurve1 = self.audio.plot(np.ones(self.audioBlockSize,), pen=pg.mkPen('m'))
@@ -115,7 +116,7 @@ class OpenHSV (QWidget):
         ay = self.audio.getPlotItem().getAxis('left')
         ay.setTicks([[(-1, '  audio'), (1, '  reference')]])
 
-        # _, self.fake_reference = read(r"D:\Research\Phoniatrie\HSE\Sprechstunde\20200206_Kist\20200206_150030_Kist_Andreas.wav")
+        _, self.fake_reference = read("openhsv/examples/audio.wav")
 
 
         # F0
@@ -495,11 +496,14 @@ class OpenHSV (QWidget):
         :param data: audio data from audio interface
         :type data: numpy.ndarray
         """
-        self.audioCurve1.setData(data[:, 0]+1)
-        # Fake reference signal
-        # self.audioCurve1.setData(self.fake_reference[:len(data[:,0]),0]+1)
-        self.audioCurve2.setData(data[:, 1]-1)
+        # Fake reference signal when DummyCamera is used
+        if self.cam.__class__.__name__ == 'DummyCamera':
+            self.audioCurve1.setData(self.fake_reference[:len(data[:,0]),0]+1)
+        # If real camera is used, use real audio signal
+        else:
+            self.audioCurve1.setData(data[:, 0]+1)
 
+        self.audioCurve2.setData(data[:, 1]-1)
         self.audioQueue.put(data.copy())
 
     def stopAudio(self):
@@ -512,6 +516,8 @@ class OpenHSV (QWidget):
         # save data to memory and calculate F0.
         while not self.audioQueue.empty():
             self.F0()
+
+
 
         self.recorder = None
 
@@ -761,7 +767,11 @@ class OpenHSV (QWidget):
 
         # Audio
         try:
-            audio = np.vstack(self.audioData)
+            if self.cam.__class__.__name__ == 'DummyCamera':
+                audio = self.fake_reference
+            else:
+                audio = np.vstack(self.audioData)
+
             self.a.setAudio(audio)
             self.a.syncAudio(start, end, self.cam.frames_to_record)
             
