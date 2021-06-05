@@ -28,7 +28,7 @@ https://openhsv.readthedocs.io/en/latest/
 
 ## How to cite OpenHSV
 
-T.B.A.
+Kist AM, Dürr S, Schützenberger A, Döllinger M. OpenHSV, an Open Platform for Laryngeal High-Speed Videoendoscopy. _Scientific Reports_ (in press).
 
 ## Contact
 
