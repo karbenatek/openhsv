@@ -1096,7 +1096,7 @@ class GAW(Signal):
         params['F0_Spectrum'] = F0fromFFT(self.fft, self.fftfreq, 75, 500)
         params['F0_Autocorr'] = F0fromAutocorrelation(self.raw_signal)
 
-        params['Opening Quotient'] = openQuotient(self.t_open, self.t_closed)
+        params['Open Quotient'] = openQuotient(self.t_open, self.t_closed)
         params['Closing Quotient'] = closingQuotient(self.CO, self.t_open)
         params['Speed Quotient'] = speedQuotient(self.CO, self.OC)
         params['Asymmetry Quotient'] = asymmetryQuotient(self.CO, self.OC)
