@@ -38,7 +38,7 @@ Next, we use the segmented glottal area to
 With that, we follow the analysis pipeline as shown in the above Figure, panel b,
 to finally compute quantitative parameters. Currently, these are:
 
-    * Opening Quotient (OQ)
+    * Open Quotient (OQ)
     * Closing Quotient (CQ)
     * Asymmetry Quotient (AQ)
     * Rate Quotient (RQ)
