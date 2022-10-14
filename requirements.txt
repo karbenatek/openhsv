@@ -7,7 +7,7 @@ helpdev==0.7.1
 imageio==2.9.0
 imageio-ffmpeg==0.4.2
 importlib-metadata==2.0.0
-joblib==0.16.0
+joblib==1.2.0
 kiwisolver==1.2.0
 llvmlite==0.34.0
 matplotlib==3.3.2
