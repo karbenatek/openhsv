@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import QWidget, QGridLayout, QLabel, QDialog, QPushButton
-from skimage.util import pad
+from numpy import pad
 import pyqtgraph as pg
 from skimage.color import rgb2gray
 import numpy as np
